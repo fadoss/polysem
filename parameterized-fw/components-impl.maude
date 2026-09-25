@@ -1,0 +1,199 @@
+load formal-defs.maude
+load ../semantics-basics/smt-conversion.maude
+load ../semantics-basics/semantics-basics-narrowing.maude
+
+*** For each semantic instantiation (SI) of each type
+
+fmod SI1-C-VALUES is
+	*** Módulo que define una instancia concreta de valores semánticos
+	*** para ejecución concreta o simbólica o lo que sea
+
+	protecting BOOL .
+	protecting RAT .
+
+	*** R: This can be directly Int!! Or define operators for each sort
+	sorts IValC BValC RValC .
+	***subsorts Bool < BValC .
+	***subsorts Int < IValC .
+	***op bval : Bool -> BValC [ctor] .
+	***op ival : Int -> IValC [ctor] .
+endfm
+
+view SI1base from SEMANTIC-TYPES to SI1-C-VALUES is
+	sort BVal to Bool .
+	op tt to true .
+	op ff to false .
+	sort IVal to Int .
+	sort RVal to Rat .
+endv
+
+fmod SI1-C-EVAL is
+	protecting SI1-C-VALUES .
+	protecting EXPRESSION .
+	protecting INFRASTRUCTURE .
+
+	*** La evaluación de referencias queda pendiente
+	*** R: IValC can be target, but SI1-C-VALUES must reduce operations among IValC values to Int
+        
+	*** R: We don't need to define eval for semantic values, as they are the result of evaluating references, which are always handled by resolve
+	op eval : BExp State -> Bool .
+	eq eval(val(B:Bool), S:State) = B:Bool .
+	eq eval(I1:IExp = I2:IExp, S:State) = (eval(I1:IExp, S:State) == eval(I2:IExp, S:State)) .
+	eq eval(R1:RExp = R2:RExp, S:State) = (eval(R1:RExp, S:State) == eval(R2:RExp, S:State)) .
+	eq eval(I1:IExp > I2:IExp, S:State) = (eval(I1:IExp, S:State) > eval(I2:IExp, S:State)) .
+	***eq eval(val(B:Bool), S:State) = bval(B:Bool) .
+	
+	op eval : IExp State -> Int .
+	eq eval(val(I:Int), S:State) = I:Int .
+	eq eval(I1:IExp + I2:IExp, S:State) = eval(I1:IExp, S:State) + eval(I2:IExp, S:State) .
+	***eq eval(val(I:Int), S:State) = ival(I:Int) .
+
+	op eval : RExp State -> Rat .
+	eq eval(val(R:Rat), S:State) = R:Rat .
+	eq eval(R1:RExp + R2:RExp, S:State) = eval(R1:RExp, S:State) + eval(R2:RExp, S:State) .
+	***eq eval(val(I:Int), S:State) = ival(I:Int) .
+endfm
+
+view SI1 from SEMANTIC-EVAL to SI1-C-EVAL is
+	sort BVal to Bool .
+	op tt to true .
+	op ff to false .
+	sort IVal to Int .
+	sort RVal to Rat .
+endv
+
+*** SMT
+
+fmod SI2-SMT-VALUES is
+	*** Módulo que define una instancia concreta de valores semánticos
+	*** para ejecución concreta o simbólica o lo que sea
+
+	protecting REAL-INTEGER .
+
+	*** R: This can be directly Int!! Or define operators for each sort
+	sorts IValS BValS RValS .
+	subsort IValS < RValS .
+	***subsorts Boolean < BValS .
+	***subsorts Integer < IValS .
+	***subsorts Real < RValS .
+	***op bval : Boolean -> BValS [ctor] .
+	*** NOTE: We only need to dissambiguate colliding sorts. Boolean values can directly be Boolean sort.
+	op ival : Integer -> IValS [ctor] .
+	op rval : Real -> RValS [ctor] .
+
+
+	*** TODO: Extend with operations for Integers and Reals
+	op _=_ : IValS IValS -> Boolean .
+	eq ival(I1:Integer) = ival(I2:Integer) = I1:Integer === I2:Integer .
+	op _>_ : IValS IValS -> Boolean .
+	eq ival(I1:Integer) > ival(I2:Integer) = I1:Integer > I2:Integer .
+	op _=_ : RValS RValS -> Boolean .
+	eq rval(R1:Real) = rval(R2:Real) = R1:Real === R2:Real .
+
+	op _+_ : IValS IValS -> IValS .
+	eq ival(I1:Integer) + ival(I2:Integer) = ival(I1:Integer + I2:Integer) .
+	op _+_ : RValS RValS -> RValS .
+	eq rval(R1:Real) + rval(R2:Real) = rval(R1:Real + R2:Real) .
+endfm
+
+view SI2base from SEMANTIC-TYPES to SI2-SMT-VALUES is
+	sort BVal to Boolean .
+	op tt to true .
+	op ff to false .
+	sort IVal to IValS .
+	sort RVal to RValS .
+endv
+
+fmod SI2-SMT-EVAL is
+	protecting SI2-SMT-VALUES .
+	protecting EXPRESSION .
+	protecting INFRASTRUCTURE .
+	pr SMT-CONVERSION .
+	***pr META-CHECK . (already imported)
+
+	*** La evaluación de referencias queda pendiente
+        
+	*** R: We don't need to define eval for semantic values, as they are the result of evaluating references, which are always handled by resolve
+	op eval : BExp State -> Boolean .
+	***eq eval(val(B:Bool), S:State) = toBoolean(B:Bool) .
+	eq eval(val(B:Bool), S:State) = toBoolean(B:Bool) .
+	eq eval(I1:IExp = I2:IExp, S:State) = (eval(I1:IExp, S:State) = eval(I2:IExp, S:State)) .
+	eq eval(I1:IExp > I2:IExp, S:State) = (eval(I1:IExp, S:State) > eval(I2:IExp, S:State)) .
+	eq eval(R1:RExp = R2:RExp, S:State) = (eval(R1:RExp, S:State) = eval(R2:RExp, S:State)) .
+	***eq eval(I1:IExp > I2:IExp, S:State) = (eval(I1:IExp, S:State) > eval(I2:IExp, S:State)) .
+
+	op eval : IExp State -> IValS .
+	***eq eval(val(I:Int), S:State) = toInteger(I:Int) .
+	eq eval(val(I:Int), S:State) = ival(toInteger(I:Int)) .
+	eq eval(I1:IExp + I2:IExp, S:State) = eval(I1:IExp, S:State) + eval(I2:IExp, S:State) .
+
+	op eval : RExp State -> RValS .
+	***eq eval(val(R:Rat), S:State) = toReal(R:Rat) .
+	eq eval(val(R:Rat), S:State) = rval(toReal(R:Rat)) .
+endfm
+
+view SI2 from SEMANTIC-EVAL to SI2-SMT-EVAL is
+	sort BVal to Boolean .
+	op tt to true .
+	op ff to false .
+	sort IVal to IValS .
+	sort RVal to RValS .
+
+	***op eval(I:IExp, S:State) to term metaCheck(['SI2-SMT-EVAL], eval(I:IExp, S:State)) .
+endv
+
+*** NARROWING
+
+fmod SI3-NRW-VALUES is
+	*** Módulo que define una instancia concreta de valores semánticos
+	*** para ejecución concreta o simbólica o lo que sea
+
+	protecting NARROWING-BASICS .
+
+	sorts IValS BValS RValS .
+	*** FIXME: Too forced, RValS should not exist here
+	***subsort IntFVP < RValS .
+
+	***op _<_ : IntFVP IntFVP -> BoolFVP .
+endfm
+
+view SI3base from SEMANTIC-TYPES to SI3-NRW-VALUES is
+	sort BVal to BoolFVP .
+	sort IVal to IntFVP .
+	op tt to tt .
+	op ff to ff .
+	***FIXME: RVal should not even be mapped
+	***sort RVal to RValS .
+	sort RVal to IntFVP .
+endv
+
+fmod SI3-NRW-EVAL is
+	protecting SI3-NRW-VALUES .
+	protecting EXPRESSION .
+	protecting INFRASTRUCTURE .
+	pr NARROWING-CONVERSION .
+
+	*** La evaluación de referencias queda pendiente
+        
+	*** R: We don't need to define eval for semantic values, as they are the result of evaluating references, which are always handled by resolve
+	op eval : BExp State -> BoolFVP .
+	***eq eval(val(B:Bool), S:State) = toBoolean(B:Bool) .
+	eq eval(val(B:Bool), S:State) = toBoolFVP(B:Bool) .
+	eq eval(I1:IExp = I2:IExp, S:State) = (eval(I1:IExp, S:State) = eval(I2:IExp, S:State)) .
+	eq eval(I1:IExp > I2:IExp, S:State) = (eval(I1:IExp, S:State) > eval(I2:IExp, S:State)) .
+	
+	op eval : IExp State -> IntFVP .
+	***eq eval(val(I:Int), S:State) = toInteger(I:Int) .
+	eq eval(val(I:Int), S:State) = toIntFVP(I:Int) .
+	eq eval(I1:IExp + I2:IExp, S:State) = eval(I1:IExp, S:State) + eval(I2:IExp, S:State) .
+endfm
+
+view SI3 from SEMANTIC-EVAL to SI3-NRW-EVAL is
+	sort BVal to BoolFVP .
+	op tt to tt .
+	op ff to ff .
+	sort IVal to IntFVP .
+	***FIXME: RVal should not even be mapped
+	***sort RVal to RValS .
+	sort RVal to IntFVP .
+endv

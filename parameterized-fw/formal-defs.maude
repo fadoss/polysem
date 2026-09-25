@@ -1,0 +1,103 @@
+***
+*** Esquema parametrizado mínimamente viable
+***
+
+***
+*** Provided by the framework
+***
+
+fmod LANGUAGE-INFRASTRUCTURE is
+	sort Reference . *** tipo de las referencias
+endfm
+
+fmod INFRASTRUCTURE is
+	protecting LANGUAGE-INFRASTRUCTURE .
+	sort State . *** tipo del estado
+endfm
+
+*** For each language-level type
+
+fmod EXPRESSION is
+	protecting LANGUAGE-INFRASTRUCTURE .
+	pr BOOL .
+	pr INT .
+	pr RAT .
+
+	sorts IExp BExp RExp . *** sintaxis de las expresiones para el tipo proporcionado
+	sorts SynBVal SynIVal SynRVal .
+	subsort SynBVal < BExp .
+	subsort SynIVal < IExp .
+	subsort SynRVal < RExp .
+	subsort SynIVal < SynRVal .
+
+	op bref : Reference -> BExp [ctor] .
+	op iref : Reference -> IExp [ctor] .
+	op rref : Reference -> RExp [ctor] .
+	
+	op val : Bool -> SynBVal [ctor] .
+	op val : Int -> SynIVal [ctor] .
+	op val : Rat -> SynRVal [ctor] .
+
+	*** FIXME: Should't this syntax be adaptable by the user to each language? There is a dependency of this in eval definitions on components-impl.maude...
+	*** FIXME: Maybe both should be at level (3)...
+	op _+_ : IExp IExp -> IExp .
+	op _=_ : IExp IExp -> BExp .
+	op _<_ : IExp IExp -> BExp .
+	op _>_ : IExp IExp -> BExp .
+endfm
+
+fth SEMANTIC-BOOL is
+	*** Teoría de tipos formales para booleanos
+	sort BVal .
+	op tt : -> BVal [ctor] .
+	op ff : -> BVal [ctor] .
+	op not_ : BVal -> BVal .
+
+	eq not tt = ff .
+	eq not ff = tt . 
+endfth
+fth SEMANTIC-INT is
+	*** Teoría de tipos formales para enteros
+	sorts IVal .
+endfth
+fth SEMANTIC-RAT is
+	*** Teoría de tipos formales para racionales
+	including SEMANTIC-INT .
+
+	*** FIXME: Problem with using Reals is that syntactically IVal < RVal is true, but not semantically
+	sorts RVal .
+	subsort IVal < RVal .
+endfth
+
+fth SEMANTIC-TYPES-NORAT is
+	*** Teoría de tipos formales para los valores semánticos
+
+	including SEMANTIC-BOOL .
+	including SEMANTIC-INT .
+endfth
+fth SEMANTIC-TYPES is
+	*** Teoría de tipos formales para los valores semánticos
+
+	including SEMANTIC-BOOL .
+	including SEMANTIC-RAT .
+endfth
+
+fth SEMANTIC-EVAL is
+	including SEMANTIC-TYPES .
+	protecting EXPRESSION .
+	protecting INFRASTRUCTURE .
+
+	*** Teoría de funciones de evaluación formales para los valores semánticos
+	*** Evaluation of semantic values is not needed (their value is retrieved from evaluating their references)
+
+	op eval : BExp State -> BVal .
+	op eval : IExp State -> IVal .
+	op eval : RExp State -> RVal .
+endfth
+
+view SemanticTypes from SEMANTIC-TYPES to SEMANTIC-EVAL is  *** las vistas a teorías están desaconsejadas, pero hay alternativas
+	*** identidad (vista de olvido de eval)
+endv
+view SemanticTypesNoRat from SEMANTIC-TYPES-NORAT to SEMANTIC-EVAL is  *** las vistas a teorías están desaconsejadas, pero hay alternativas
+	*** identidad (vista de olvido de eval)
+endv

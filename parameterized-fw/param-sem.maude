@@ -1,0 +1,387 @@
+load components-impl.maude
+
+***
+*** Provided by the user (for each language)
+***
+
+fmod LANGUAGE is
+	extending LANGUAGE-INFRASTRUCTURE .
+	protecting EXPRESSION .
+	protecting INT .
+	protecting QID .
+
+	sort Inst .
+	sort Var .
+	subsort Var < Reference .
+	*** Lenguaje al que se le da semántica
+	op var : Qid -> Var [ctor] .
+
+	op _ := _ ; : Var IExp -> Inst [ctor prec 20] .
+    op _ := _ ; : Var BExp -> Inst [ctor prec 20] .
+    op _ := _ ; : Var RExp -> Inst [ctor prec 20] .
+endfm
+
+view Inst from TRIV to LANGUAGE is
+	sort Elt to Inst .
+endv
+view Reference from TRIV to LANGUAGE is
+	sort Elt to Reference .
+endv
+
+*** Dummy module to generate views
+fmod FORMAL-TYPES{X :: SEMANTIC-TYPES} is
+endfm
+
+view BVal{X :: SEMANTIC-TYPES} from TRIV to FORMAL-TYPES{X} is
+	sort Elt to X$BVal .
+endv
+view IVal{X :: SEMANTIC-TYPES} from TRIV to FORMAL-TYPES{X} is
+	sort Elt to X$IVal .
+endv
+view RVal{X :: SEMANTIC-TYPES} from TRIV to FORMAL-TYPES{X} is
+	sort Elt to X$RVal .
+endv
+
+fmod SEMANTIC-STATE{X :: SEMANTIC-TYPES} is
+	*** R: Defines full S_{fw,v}
+	protecting LANGUAGE .
+	extending INFRASTRUCTURE .
+
+	protecting MAP{Qid, BVal{X}} * (sort Map{Qid, BVal{X}} to BStore) * (op _|->_ to _|->B_ ) .
+	protecting MAP{Qid, IVal{X}} * (sort Map{Qid, IVal{X}} to IStore) * (op _|->_ to _|->I_ ) .
+	protecting MAP{Qid, RVal{X}} * (sort Map{Qid, RVal{X}} to RStore) * (op _|->_ to _|->R_ ) .
+
+	protecting LIST{Inst} * (sort List{Inst} to Program) .
+
+    op if _ then {_} else {_} : BExp Program Program -> Inst [ctor prec 20] .
+    op if _ then {_} : BExp Program -> Inst [prec 20] .
+
+    op while _ do {_} : BExp Program -> Inst [ctor prec 20] .
+
+	sort Store .
+
+	*** Operadores que definen el estado de la semántica y funciones auxiliares
+	op bresolve : Reference State -> X$BVal .
+	op iresolve : Reference State -> X$IVal .
+	op rresolve : Reference State -> X$RVal .
+
+	*** Program
+	op _|_|_ : BStore IStore RStore -> Store [ctor] .
+	op <_|_> : Program Store -> State [ctor] .
+
+	eq bresolve(var(Q:Qid), < P:Program | (BSTR:BStore | ISTR:IStore | RSTR:RStore ) >) = BSTR:BStore[Q:Qid] .
+	eq iresolve(var(Q:Qid), < P:Program | (BSTR:BStore | ISTR:IStore | RSTR:RStore ) >) = ISTR:IStore[Q:Qid] .
+	eq rresolve(var(Q:Qid), < P:Program | (BSTR:BStore | ISTR:IStore | RSTR:RStore ) >) = RSTR:RStore[Q:Qid] .
+endfm
+
+mod SEMANTIC-RULES{X :: SEMANTIC-EVAL} is
+	*** R: Generic definition of semantic rules (R_v), and import S_{fw,v}
+	*** NOTE: For narrowing use SemanticTypesNoRat instead of SemanticTypes
+	protecting SEMANTIC-STATE{SemanticTypes}{X} .
+	*** Reglas de la semántica (usando eval de X)
+	vars P P1 P2 : Program .
+	var V : Var . var Q : Qid .
+	var IExp : IExp . var BExp : BExp . var RExp : RExp .
+	var ISTR : IStore . var BSTR : BStore . var RSTR : RStore .
+	var STR : Store .
+
+	*** rew in SEMANTIC-SI1 : < var('x) := (val(2) + val(3)) ; var('y) := val(true) ; | (empty | empty | empty)  > .
+	*** rew in SEMANTIC-SI2 : < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; | (empty | empty | empty)  > .
+	*** rew in SEMANTIC-SI2 : < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (var('x) = var('y)) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty)  > .
+	*** rew in SEMANTIC-SI1 : < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (val(5) = val(5)) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty)  > .
+	*** rew in SEMANTIC-SI1 : < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) = iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty)  > .
+	*** MaudeSE> smt-search [1] < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) = iref(var('y))) then {var('z) := val((true).Bool) ;} else {var('z) := val((false).Bool) ; } | (empty | empty | empty) > =>* S:State such that (true).Boolean using QF_LRA .
+	*** smt-search [1] < var('x) := (val(2) + val(3)) ; | (empty | empty | empty) > =>* S:State such that (true).Boolean using QF_LRA .
+	*** vu-narrow {delay, filter} in SEMANTIC-SI3 : < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (val(5) > val(5)) then {var('z) := val((true).Bool) ;} else {var('z) := val((false).Bool) ; } | (empty | empty | empty) > =>* S:State .
+	*** vu-narrow {delay, filter} < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (val(5) > val(5)) then {var('z) := val((true).Bool) ;} else {var('z) := val((false).Bool) ; } | (empty | empty | empty) > =>* S:State .
+	*** search in SEMANTIC-SI3 : < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (val(5) > val(5)) then {var('z) := val((true).Bool) ;} else {var('z) := val((false).Bool) ; } | (empty | empty | empty) > =>* S:State .
+	rl [assign-B] : < var(Q) := BExp ; P | (BSTR | ISTR | RSTR) > 
+					=> 
+					< P | (insert(Q, eval(BExp, < nil | (BSTR | ISTR | RSTR) >), BSTR) | ISTR | RSTR) > .
+	rl [assign-I] : < var(Q) := IExp ; P | (BSTR | ISTR | RSTR) > 
+					=> 
+					< P | (BSTR | insert(Q, eval(IExp, < nil | (BSTR | ISTR | RSTR) >), ISTR) | RSTR) > .
+	rl [assign-R] : < var(Q) := RExp ; P | (BSTR | ISTR | RSTR) > 
+					=> 
+					< P | (BSTR | ISTR | insert(Q, eval(RExp, < nil | (BSTR | ISTR | RSTR) >), RSTR)) > .
+
+	*** NOTE: The condition is type BVal...
+	*** TODO: How to include metaCheck and [narrowing]?? -> Transformation
+    crl [if-then] : 
+        < if BExp then { P1 } else { P2 } P | STR >
+        =>
+        < P1 P | STR >
+        if eval(BExp, < nil | STR >) = tt .
+
+    crl [if-else] : 
+        < if BExp then { P1 } else { P2 } P | STR >
+        =>
+        < P2 P | STR >
+        if (not eval(BExp, < nil | STR >)) = tt .
+    *** R: Moved here from below but maybe bettwer below...
+	*** Extiende ecuacionalmente la función de evaluación
+	
+	***eq eval(iref(R:Reference), S:State) = iresolve(R:Reference, S:State) .
+endm
+
+***
+*** Semantic instantiation by the user
+***
+
+mod SEMANTIC-SI1 is
+	*** R: Instantiate SEMANTIC-RULES with SI1 to get concrete eval and IValC. Similar to S_{fw,c} + R_c
+	including SEMANTIC-RULES{SI1} .
+	
+	*** Extiende ecuacionalmente la función de evaluación
+	
+	eq eval(bref(R:Reference), S:State) = bresolve(R:Reference, S:State) .
+	eq eval(iref(R:Reference), S:State) = iresolve(R:Reference, S:State) .
+
+endm
+
+***view evalMetaCheck from 
+
+mod SEMANTIC-SI2 is
+	*** SMT semantic instance
+	including SEMANTIC-RULES{SI2} .
+	***protecting META-LEVEL .
+	
+	*** Extiende ecuacionalmente la función de evaluación
+	
+	eq eval(bref(R:Reference), S:State) = bresolve(R:Reference, S:State) .
+	eq eval(iref(R:Reference), S:State) = iresolve(R:Reference, S:State) .
+
+endm
+
+mod SEMANTIC-SI3 is
+	*** SMT semantic instance
+	including SEMANTIC-RULES{SI3} .
+	
+	*** Extiende ecuacionalmente la función de evaluación
+	
+	eq eval(bref(R:Reference), S:State) = bresolve(R:Reference, S:State) .
+	eq eval(iref(R:Reference), S:State) = iresolve(R:Reference, S:State) .
+
+endm
+
+*** TEST
+
+*** TODO: Make it work directly with MaudeSE (no transformation should be needed...)
+***mod TEST-SI2 is
+***
+***	protecting SEMANTIC-SI2 .
+***    pr META-SMT-SEARCH . 
+***
+***	op TEST1 : -> State [ctor] .
+***
+***	eq TEST1 = < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) = iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) > .
+***
+***	*** NOTE: metaSmtSearch can only be used from Python lib 
+***	*** metaSmtSearch(['SEMANTIC-SI2], upTerm(TEST1), 'S:State, nil, '*, none, 0, 'QF_LRA, false) .
+***endm
+
+fmod TRANSFORMER is
+
+	*** TODO: Move to separate file
+
+	*** Adapted from previous version of transformation
+
+	protecting META-LEVEL .
+
+    *** Aux from generic transformation
+    vars M M' : Module .
+    var MConst : Constant .
+    var MVar : Variable .
+    var OpId : Qid .
+    var T1 : Term .
+    var NeTL : NeTermList .
+
+    *** Fuses a module and a functional module into one
+    op fuseMods : Module Module -> Module .
+    eq fuseMods(M, M') = mod getName(M) is
+                            getImports(M) getImports(M')
+                            sorts getSorts(M) ; getSorts(M') .
+                            getSubsorts(M) getSubsorts(M')
+                            getOps(M) getOps(M')
+                            getMbs(M) getMbs(M')
+                            getEqs(M) getEqs(M')
+                            getRls(M) getRls(M')
+                            ***getStrats(M) getStrats(FM)
+                            ***getSds(M) getSds(FM)
+                          endm .
+
+	op inclTrSt : OpDeclSet -> OpDeclSet .
+	op trRl : RuleSet -> RuleSet .
+
+	op trMod : Module -> Module .
+	eq trMod(M) = mod 'TRANSFORMED-MOD is
+						getImports(M)
+						sorts getSorts(M) .
+						getSubsorts(M)
+						inclTrSt(getOps(M))
+						getMbs(M)
+						getEqs(M)
+						trRl(getRls(M))
+						***getStrats(M)
+						***getSds(M)
+					endm .
+    
+    op transformModSymb : Module -> Module .
+    eq transformModSymb(M) = fuseMods(trMod(M), upModule('NARROWING-CONV-EXT, true)) .
+
+    op hasEval : TermList -> Bool .
+    eq hasEval(empty)        = false .
+    eq hasEval(MConst)       = false .
+    eq hasEval(MVar)         = false .
+    ***eq hasEval('eval[NeTL])  = true .
+    eq hasEval('eval[NeTL]) = true .
+    eq hasEval(OpId[NeTL])   = hasEval(NeTL) [owise] .
+    eq hasEval((T1, NeTL))  = (hasEval(T1) or hasEval(NeTL)) .
+
+    op toSymb : Qid -> Qid .
+    eq toSymb(OpId) = qid(string(OpId) + "S") .
+endfm
+
+fmod SMT-TRANSFORMER is
+	protecting TRANSFORMER .
+
+	*** Aux from generic transformation
+    vars M M' : Module .
+    vars OpId InstId Q : Qid .
+    vars T1 T2 Tcond : Term .
+    var NeTL : NeTermList .
+    var RlSet : RuleSet .
+    var Rule : Rule .
+    var AttrSet : AttrSet .
+    var OpDeclSet : OpDeclSet .
+    var OpDecl : OpDecl .
+    var NeTypeL : NeTypeList .
+	var Cond : Condition .
+
+	*** Populate inclTrSt
+	eq inclTrSt(OpDeclSet) = inclSmtSt(OpDeclSet) .
+
+	op inclSmtSt : OpDeclSet -> OpDeclSet .
+    eq inclSmtSt(none) = none .
+	*** TODO: Maybe change 'State to 'SEState
+    eq inclSmtSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
+																		  (op '_`{_`} : 'State 'Boolean -> 'State [ctor AttrSet] .) 
+                                                                          inclSmtSt(OpDeclSet) . 
+    eq inclSmtSt(OpDecl OpDeclSet) = OpDecl inclSmtSt(OpDeclSet) [owise] .
+
+	*** Populate trRl
+	eq trRl(RlSet) = rlToSMT(RlSet) .
+
+	op rlToSMT : RuleSet ~> RuleSet .
+    eq rlToSMT(none) = none .
+    eq rlToSMT(rl T1 => T2 [label(InstId) AttrSet] . RlSet) = 
+          rl '_`{_`}[T1, 'Constraints:Boolean]
+            => '_`{_`}[T2, 'Constraints:Boolean] 
+            [label(toSymb(InstId)) AttrSet] .
+          rlToSMT(RlSet) .
+    eq rlToSMT(crl T1 => T2 if Tcond = 'true.Boolean [label(InstId) AttrSet] . RlSet) = 
+          crl '_`{_`}[T1, 'Constraints:Boolean]
+            => '_`{_`}[T2, 'Constraints':Boolean]
+            if 'Constraints':Boolean := '_and_['Constraints:Boolean, Tcond]
+            /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool 
+            [label(toSymb(InstId)) AttrSet] .
+          rlToSMT(RlSet) .
+    eq rlToSMT(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet) = 
+          crl '_`{_`}[T1, 'Constraints:Boolean]
+            => '_`{_`}[T2, 'Constraints:Boolean]
+            if Cond
+            [label(toSymb(InstId)) AttrSet] .
+          rlToSMT(RlSet) [owise] .
+    eq rlToSMT(Rule RlSet) = Rule rlToSMT(RlSet) [owise] .
+endfm
+
+fmod NRW-TRANSFORMER is
+	protecting TRANSFORMER .
+
+	*** Aux from generic transformation
+    vars M M' : Module .
+    vars OpId InstId Q : Qid .
+    vars T1 T2 Tcond : Term .
+    var NeTL : NeTermList .
+    var RlSet : RuleSet .
+    var Rule : Rule .
+    var AttrSet : AttrSet .
+    var OpDeclSet : OpDeclSet .
+    var OpDecl : OpDecl .
+    var NeTypeL : NeTypeList .
+
+	*** Populate inclTrSt
+	eq inclTrSt(OpDeclSet) = inclNrwSt(OpDeclSet) .
+
+	op inclNrwSt : OpDeclSet -> OpDeclSet .
+    eq inclNrwSt(none) = none .
+    eq inclNrwSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
+                                                                          (op extNrwSt(Q) : NeTypeL 'BoolFVP -> 'State [ctor AttrSet] .) 
+                                                                          inclNrwSt(OpDeclSet) . 
+    eq inclNrwSt(OpDecl OpDeclSet) = OpDecl inclNrwSt(OpDeclSet) [owise] .
+
+	op extNrwSt : Qid -> Qid .
+    op extNrwSt : Term Term -> Term .
+    eq extNrwSt(Q) = qid(string(Q) + "[_]") .
+    eq extNrwSt(OpId[NeTL], T2) = extNrwSt(OpId)[NeTL, T2] .
+    eq extNrwSt(T1, T2) = T1 [owise] .
+
+	*** Populate trRl
+	eq trRl(RlSet) = rlToNarrowing(RlSet) .
+
+    op rlToNarrowing : RuleSet -> RuleSet .
+    eq rlToNarrowing(none) = none .
+    eq rlToNarrowing(rl T1 => T2 [AttrSet] . RlSet) = rl T1 => T2 [AttrSet narrowing] . rlToNarrowing(RlSet) .
+    eq rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'tt.BoolFVP) [label(InstId) AttrSet] . RlSet) =
+                      (rl T1 => extNrwSt(T1, 'eval[NeTL:NeTermList]) [narrowing AttrSet] .)
+                      (rl extNrwSt(T1, 'tt.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
+                    rlToNarrowing(RlSet) .
+    eq rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'ff.BoolFVP) [label(InstId) AttrSet] . RlSet) =
+                      (rl T1 => extNrwSt(T1, 'eval[NeTL:NeTermList]) [narrowing AttrSet] .)
+                      (rl extNrwSt(T1, 'ff.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
+                    rlToNarrowing(RlSet) .
+    eq rlToNarrowing(crl T1 => T2 if 'not_['eval[NeTL:NeTermList]] = 'tt.BoolFVP [AttrSet] . RlSet) = rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'ff.BoolFVP) [AttrSet] . RlSet) .
+    *** Use non eval conditions in narrowing???
+    ceq rlToNarrowing(crl T1 => T2 if (Tcond = 'tt.BoolFVP) [label(InstId) AttrSet] . RlSet) =
+                      (rl T1 => extNrwSt(T1, Tcond) [narrowing AttrSet] .)
+                      (rl extNrwSt(T1, 'tt.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
+                    rlToNarrowing(RlSet)
+      if not hasEval(Tcond) .
+    eq rlToNarrowing(Rule RlSet) = Rule rlToNarrowing(RlSet) [owise] .
+endfm
+
+mod TEST-SI2 is
+
+	protecting SEMANTIC-SI2 .
+	protecting SMT-TRANSFORMER .
+
+	ops TEST1 TEST2 : -> State [ctor] .
+
+	eq TEST1 = < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) > .
+	***eq TEST2 = < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) > .
+
+	op initSMT : State -> Term .
+	eq initSMT(S:State) = '_`{_`}[upTerm(S:State), 'true.Boolean] .
+
+    *** red in TEST-SI2 : metaSearch(transformModSymb(upModule('SEMANTIC-SI2, true)), initSMT(TEST1), 'S:State, nil, '*, unbounded, 0) .
+    *** Test final states reasoning over p:Integer
+	*** red in TEST-SI2 : metaSearch(transformModSymb(upModule('SEMANTIC-SI2, true)), initSMT(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) >), 'S:State, nil, '!, unbounded, 0) .
+
+	*** NOTE: When gettying Advisory: could not find sort Sort in meta-module REAL-INTEGER.
+	*** - Cause: typicallly operator is not defined for datatype and/or eval not defined for operator 
+
+endm
+
+mod TEST-SI3 is
+	*** TODO: TEST
+
+	protecting SEMANTIC-SI3 .
+	protecting NRW-TRANSFORMER .
+
+	op TEST1 : -> State [ctor] .
+
+	eq TEST1 = < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) > .
+
+    *** red in TEST-SI3 : metaNarrowingSearch(transformModSymb(upModule('SEMANTIC-SI3, true)), upTerm(TEST1), 'S:State, '*, unbounded, 'match, delay filter, 0) .
+
+endm
