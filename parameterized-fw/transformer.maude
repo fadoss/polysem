@@ -1,4 +1,26 @@
 
+load ../semantics-basics/smt-conversion.maude
+
+fmod META-SMT-HOOK is
+
+  protecting SMT-CONVERSION .
+  protecting META-LEVEL .
+
+  sort AssignmentSMT .
+
+  *** Define a satisfying assignment returned by the SMT hook
+  op _<--_ : Real Real                 -> AssignmentSMT [ctor] .
+  op _<--_ : Integer Integer           -> AssignmentSMT [ctor] .
+  op _<--_ : Boolean Boolean           -> AssignmentSMT [ctor] .
+  op _,_ : AssignmentSMT AssignmentSMT -> AssignmentSMT .
+  op failed :                          -> AssignmentSMT [ctor] .
+
+  *** Operator defined in Python using a hook
+  *** Given a Boolean constraint returns a satisfying assignment to the symbolic variables it may contain
+  op get-SMTassignment : Boolean -> AssignmentSMT [special (id-hook SpecialHubSymbol)] .
+
+endfm
+
 fmod TRANSFORMER is
 
 	*** TODO: Move to separate file
@@ -67,7 +89,7 @@ fmod TRANSFORMER is
                                       trRl(getRls(M), getRls(M'))
                                       ***getStrats(M)
                                       ***getSds(M)
-                                    endm, upModule('META-LEVEL, true))
+                                    endm, upModule('META-SMT-HOOK, true))
     if mod H is ImpL sorts SortS . SubSortS OpDeclSet MbAS EqS RlS endm := fuseMods(M, M') .
     
   op transformModSymb : Module -> Module .
@@ -207,15 +229,6 @@ endfm
 fmod CONCOLIC-TRANSFORMER is
 	protecting TRANSFORMER .
 
-  sort AssignmentSMT .
-
-  *** Define a satisfying assignment returned by the SMT hook
-  op _<--_ : Real Real                 -> AssignmentSMT [ctor] .
-  op _<--_ : Integer Integer           -> AssignmentSMT [ctor] .
-  op _<--_ : Boolean Boolean           -> AssignmentSMT [ctor] .
-  op _,_ : AssignmentSMT AssignmentSMT -> AssignmentSMT .
-  op failed :                          -> AssignmentSMT [ctor] .
-
 	*** Aux from generic transformation
   vars M M' : Module .
   vars OpId InstId Q : Qid .
@@ -234,6 +247,14 @@ fmod CONCOLIC-TRANSFORMER is
   
   *** Populate inclOps
 	eq inclOps(OpDeclSet) = (op 'init-CState : 'Term 'Boolean -> 'State [none] .)
+                          (op '$apply-SMTassignment : 'Term 'AssignmentSMT -> 'Term [none] .)
+                          *** Initialize a concrete store with default values from a symbolic store
+                          (op 'initialize-def : 'Term -> 'Term [none] .)
+                          (op 'initialize-def : 'TermList -> 'TermList [none] .)
+                          (op 'get-def : 'Variable 'Sort -> 'Constant [none] .)
+                          *** Substitute a term t2 by t1 in t0
+                          (op 'subT : 'TermList 'Term 'Term -> 'Term [none] .)
+                          (op 'errS : nil -> 'State [ctor] .)
                           inclConcolicSt(OpDeclSet) .
 
 	op inclConcolicSt : OpDeclSet -> OpDeclSet .
@@ -244,10 +265,6 @@ fmod CONCOLIC-TRANSFORMER is
                                                                              (op '`[_`]`[_`]`[_`] : 'State 'SEState 'State -> 'ConcolicState [ctor] .)
                                                                              inclConcolicSt(OpDeclSet) . 
   eq inclConcolicSt(OpDecl OpDeclSet) = OpDecl inclConcolicSt(OpDeclSet) [owise] .
-
-  *** Operator defined in Python using a hook
-  *** Given a Boolean constraint returns a satisfying assignment to the symbolic variables it may contain
-  op get-SMTassignment : Boolean -> AssignmentSMT [special (id-hook SpecialHubSymbol)] .
 
   *** Populate inclEqs
   op inclSEEqs : -> EquationSet .
