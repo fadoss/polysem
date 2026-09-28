@@ -180,175 +180,7 @@ endm
 ***	*** metaSmtSearch(['SEMANTIC-SI2], upTerm(TEST1), 'S:State, nil, '*, none, 0, 'QF_LRA, false) .
 ***endm
 
-fmod TRANSFORMER is
-
-	*** TODO: Move to separate file
-
-	*** Adapted from previous version of transformation
-
-	protecting META-LEVEL .
-
-    *** Aux from generic transformation
-    vars M M' : Module .
-    var MConst : Constant .
-    var MVar : Variable .
-    var OpId : Qid .
-    var T1 : Term .
-    var NeTL : NeTermList .
-
-    *** Fuses a module and a functional module into one
-    op fuseMods : Module Module -> Module .
-    eq fuseMods(M, M') = mod getName(M) is
-                            getImports(M) getImports(M')
-                            sorts getSorts(M) ; getSorts(M') .
-                            getSubsorts(M) getSubsorts(M')
-                            getOps(M) getOps(M')
-                            getMbs(M) getMbs(M')
-                            getEqs(M) getEqs(M')
-                            getRls(M) getRls(M')
-                            ***getStrats(M) getStrats(FM)
-                            ***getSds(M) getSds(FM)
-                          endm .
-
-	op inclTrSt : OpDeclSet -> OpDeclSet .
-	op trRl : RuleSet -> RuleSet .
-
-	op trMod : Module -> Module .
-	eq trMod(M) = mod 'TRANSFORMED-MOD is
-						getImports(M)
-						sorts getSorts(M) .
-						getSubsorts(M)
-						inclTrSt(getOps(M))
-						getMbs(M)
-						getEqs(M)
-						trRl(getRls(M))
-						***getStrats(M)
-						***getSds(M)
-					endm .
-    
-    op transformModSymb : Module -> Module .
-    eq transformModSymb(M) = fuseMods(trMod(M), upModule('NARROWING-CONV-EXT, true)) .
-
-    op hasEval : TermList -> Bool .
-    eq hasEval(empty)        = false .
-    eq hasEval(MConst)       = false .
-    eq hasEval(MVar)         = false .
-    ***eq hasEval('eval[NeTL])  = true .
-    eq hasEval('eval[NeTL]) = true .
-    eq hasEval(OpId[NeTL])   = hasEval(NeTL) [owise] .
-    eq hasEval((T1, NeTL))  = (hasEval(T1) or hasEval(NeTL)) .
-
-    op toSymb : Qid -> Qid .
-    eq toSymb(OpId) = qid(string(OpId) + "S") .
-endfm
-
-fmod SMT-TRANSFORMER is
-	protecting TRANSFORMER .
-
-	*** Aux from generic transformation
-    vars M M' : Module .
-    vars OpId InstId Q : Qid .
-    vars T1 T2 Tcond : Term .
-    var NeTL : NeTermList .
-    var RlSet : RuleSet .
-    var Rule : Rule .
-    var AttrSet : AttrSet .
-    var OpDeclSet : OpDeclSet .
-    var OpDecl : OpDecl .
-    var NeTypeL : NeTypeList .
-	var Cond : Condition .
-
-	*** Populate inclTrSt
-	eq inclTrSt(OpDeclSet) = inclSmtSt(OpDeclSet) .
-
-	op inclSmtSt : OpDeclSet -> OpDeclSet .
-    eq inclSmtSt(none) = none .
-	*** TODO: Maybe change 'State to 'SEState
-    eq inclSmtSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
-																		  (op '_`{_`} : 'State 'Boolean -> 'State [ctor AttrSet] .) 
-                                                                          inclSmtSt(OpDeclSet) . 
-    eq inclSmtSt(OpDecl OpDeclSet) = OpDecl inclSmtSt(OpDeclSet) [owise] .
-
-	*** Populate trRl
-	eq trRl(RlSet) = rlToSMT(RlSet) .
-
-	op rlToSMT : RuleSet ~> RuleSet .
-    eq rlToSMT(none) = none .
-    eq rlToSMT(rl T1 => T2 [label(InstId) AttrSet] . RlSet) = 
-          rl '_`{_`}[T1, 'Constraints:Boolean]
-            => '_`{_`}[T2, 'Constraints:Boolean] 
-            [label(toSymb(InstId)) AttrSet] .
-          rlToSMT(RlSet) .
-    eq rlToSMT(crl T1 => T2 if Tcond = 'true.Boolean [label(InstId) AttrSet] . RlSet) = 
-          crl '_`{_`}[T1, 'Constraints:Boolean]
-            => '_`{_`}[T2, 'Constraints':Boolean]
-            if 'Constraints':Boolean := '_and_['Constraints:Boolean, Tcond]
-            /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool 
-            [label(toSymb(InstId)) AttrSet] .
-          rlToSMT(RlSet) .
-    eq rlToSMT(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet) = 
-          crl '_`{_`}[T1, 'Constraints:Boolean]
-            => '_`{_`}[T2, 'Constraints:Boolean]
-            if Cond
-            [label(toSymb(InstId)) AttrSet] .
-          rlToSMT(RlSet) [owise] .
-    eq rlToSMT(Rule RlSet) = Rule rlToSMT(RlSet) [owise] .
-endfm
-
-fmod NRW-TRANSFORMER is
-	protecting TRANSFORMER .
-
-	*** Aux from generic transformation
-    vars M M' : Module .
-    vars OpId InstId Q : Qid .
-    vars T1 T2 Tcond : Term .
-    var NeTL : NeTermList .
-    var RlSet : RuleSet .
-    var Rule : Rule .
-    var AttrSet : AttrSet .
-    var OpDeclSet : OpDeclSet .
-    var OpDecl : OpDecl .
-    var NeTypeL : NeTypeList .
-
-	*** Populate inclTrSt
-	eq inclTrSt(OpDeclSet) = inclNrwSt(OpDeclSet) .
-
-	op inclNrwSt : OpDeclSet -> OpDeclSet .
-    eq inclNrwSt(none) = none .
-    eq inclNrwSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
-                                                                          (op extNrwSt(Q) : NeTypeL 'BoolFVP -> 'State [ctor AttrSet] .) 
-                                                                          inclNrwSt(OpDeclSet) . 
-    eq inclNrwSt(OpDecl OpDeclSet) = OpDecl inclNrwSt(OpDeclSet) [owise] .
-
-	op extNrwSt : Qid -> Qid .
-    op extNrwSt : Term Term -> Term .
-    eq extNrwSt(Q) = qid(string(Q) + "[_]") .
-    eq extNrwSt(OpId[NeTL], T2) = extNrwSt(OpId)[NeTL, T2] .
-    eq extNrwSt(T1, T2) = T1 [owise] .
-
-	*** Populate trRl
-	eq trRl(RlSet) = rlToNarrowing(RlSet) .
-
-    op rlToNarrowing : RuleSet -> RuleSet .
-    eq rlToNarrowing(none) = none .
-    eq rlToNarrowing(rl T1 => T2 [AttrSet] . RlSet) = rl T1 => T2 [AttrSet narrowing] . rlToNarrowing(RlSet) .
-    eq rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'tt.BoolFVP) [label(InstId) AttrSet] . RlSet) =
-                      (rl T1 => extNrwSt(T1, 'eval[NeTL:NeTermList]) [narrowing AttrSet] .)
-                      (rl extNrwSt(T1, 'tt.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
-                    rlToNarrowing(RlSet) .
-    eq rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'ff.BoolFVP) [label(InstId) AttrSet] . RlSet) =
-                      (rl T1 => extNrwSt(T1, 'eval[NeTL:NeTermList]) [narrowing AttrSet] .)
-                      (rl extNrwSt(T1, 'ff.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
-                    rlToNarrowing(RlSet) .
-    eq rlToNarrowing(crl T1 => T2 if 'not_['eval[NeTL:NeTermList]] = 'tt.BoolFVP [AttrSet] . RlSet) = rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'ff.BoolFVP) [AttrSet] . RlSet) .
-    *** Use non eval conditions in narrowing???
-    ceq rlToNarrowing(crl T1 => T2 if (Tcond = 'tt.BoolFVP) [label(InstId) AttrSet] . RlSet) =
-                      (rl T1 => extNrwSt(T1, Tcond) [narrowing AttrSet] .)
-                      (rl extNrwSt(T1, 'tt.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
-                    rlToNarrowing(RlSet)
-      if not hasEval(Tcond) .
-    eq rlToNarrowing(Rule RlSet) = Rule rlToNarrowing(RlSet) [owise] .
-endfm
+load transformer.maude
 
 mod TEST-SI2 is
 
@@ -363,6 +195,7 @@ mod TEST-SI2 is
 	op initSMT : State -> Term .
 	eq initSMT(S:State) = '_`{_`}[upTerm(S:State), 'true.Boolean] .
 
+	*** TODO: Use transformModSymb only to import meta-module (better if narrowing features are not kept)
     *** red in TEST-SI2 : metaSearch(transformModSymb(upModule('SEMANTIC-SI2, true)), initSMT(TEST1), 'S:State, nil, '*, unbounded, 0) .
     *** Test final states reasoning over p:Integer
 	*** red in TEST-SI2 : metaSearch(transformModSymb(upModule('SEMANTIC-SI2, true)), initSMT(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) >), 'S:State, nil, '!, unbounded, 0) .
@@ -381,7 +214,60 @@ mod TEST-SI3 is
 	op TEST1 : -> State [ctor] .
 
 	eq TEST1 = < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) > .
+	*** eq TEST2 = < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) > .
 
     *** red in TEST-SI3 : metaNarrowingSearch(transformModSymb(upModule('SEMANTIC-SI3, true)), upTerm(TEST1), 'S:State, '*, unbounded, 'match, delay filter, 0) .
+    *** red in TEST-SI3 : metaNarrowingSearch(transformModSymb(upModule('SEMANTIC-SI3, true)), upTerm(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) >), 'S:State, '!, unbounded, 'match, delay filter, 0) .
+
+endm
+
+mod SEMANTIC-SI2' is
+	***NOTE: Kind of IValS is RValS?
+	--- * (op _`[_`] : BStore Qid -> [Boolean] to _`[_`]S)
+	--- * (op _`[_`] : IStore Qid -> [RValS] to _`[_`]S)
+	--- * (op _`[_`] : RStore Qid -> [RValS] to _`[_`]S)
+
+	*** NOTE: We need (sort Store to StoreS) to distinguish STR:Store concrete and symbolic variables!!!
+	***		  - Do this for each Struct!!
+	protecting SEMANTIC-SI2 * (sort BStore to BStoreS)
+							* (sort IStore to IStoreS)
+							* (sort RStore to RStoreS)
+							* (sort Store to StoreS)
+							* (op eval to evalS)
+							* (op bresolve to bresolveS)
+							* (op iresolve to iresolveS)
+							* (op rresolve to rresolveS) .
+endm
+
+mod CONCOLIC-SEM is
+	protecting SEMANTIC-SI1 .
+	protecting SEMANTIC-SI2' .	
+endm
+
+mod TEST-SI-CONCOLIC is
+	*** TODO: TEST
+	protecting CONCOLIC-SEM . 
+	protecting CONCOLIC-TRANSFORMER .
+
+	var Str : String .
+
+	ops TEST1 TEST2 : -> State [ctor] .
+
+	***eq TEST1 = < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) > .
+	***eq TEST2 = < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) > .
+
+	*** TODO: Modufy to initConcolic with an init concolic state
+	op initConcolic : String -> Term .
+	eq initConcolic(Str) = '`[_`]`[_`]`[_`][
+								getTerm(metaParse(['SEMANTIC-SI1], tokenize(Str), 'State)), 
+								'_`{_`}[getTerm(metaParse(['SEMANTIC-SI2'], tokenize(Str), 'State)), 'true.Boolean], 
+								getTerm(metaParse(['SEMANTIC-SI1], tokenize(Str), 'State))] .
+
+    *** red in TEST-SI-CONCOLIC : metaSearch(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), initConcolic("< var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) >"), 'S:ConcolicState, nil, '*, unbounded, 0) .
+    *** Test final states reasoning over p:Integer
+	*** TODO: Generate initial concolic state based on input symbolic variable -> TEST!!
+
+	*** NOTE: When gettying Advisory: could not find sort Sort in meta-module REAL-INTEGER.
+	*** - Cause: typicallly operator is not defined for datatype and/or eval not defined for operator 
 
 endm

@@ -1,0 +1,374 @@
+
+fmod TRANSFORMER is
+
+	*** TODO: Move to separate file
+
+	*** Adapted from previous version of transformation
+
+	protecting META-LEVEL .
+
+    *** Aux from generic transformation
+    vars M M' : Module .
+    var MConst : Constant .
+    var MVar : Variable .
+    var OpId : Qid .
+    var T1 : Term .
+    var NeTL : NeTermList .
+    var H : Header .
+    var ImpL : ImportList .
+    var SortS : SortSet .
+    var SubSortS : SubsortDeclSet .
+    var OpDeclSet : OpDeclSet .
+    var MbAS : MembAxSet .
+    var EqS : EquationSet .
+    var RlS : RuleSet . 
+
+    *** Fuses a module and a functional module into one
+    op fuseMods : Module Module -> Module .
+    eq fuseMods(M, M') = mod getName(M) is
+                            getImports(M) getImports(M')
+                            sorts getSorts(M) ; getSorts(M') .
+                            getSubsorts(M) getSubsorts(M')
+                            getOps(M) getOps(M')
+                            getMbs(M) getMbs(M')
+                            getEqs(M) getEqs(M')
+                            getRls(M) getRls(M')
+                            ***getStrats(M) getStrats(FM)
+                            ***getSds(M) getSds(FM)
+                          endm .
+
+	op inclSorts : -> SortSet .
+  op inclOps : OpDeclSet -> OpDeclSet .
+  op inclSEEqs : -> EquationSet .
+	op trRl : RuleSet -> RuleSet .
+  *** Concolic tranformation
+	op trRl : RuleSet RuleSet -> RuleSet .
+
+	op trMod : Module -> Module .
+	eq trMod(M) = mod 'TRANSFORMED-MOD is
+						getImports(M)
+						sorts getSorts(M) ; inclSorts .
+						getSubsorts(M)
+						inclOps(getOps(M))
+						getMbs(M)
+						getEqs(M)
+						trRl(getRls(M))
+						***getStrats(M)
+						***getSds(M)
+					endm .
+  op concolictrMod : Module Module -> Module .
+	ceq concolictrMod(M, M') = fuseMods(mod 'TRANSFORMED-MOD is
+                                      ImpL
+                                      sorts SortS ; inclSorts .
+                                      SubSortS
+                                      inclOps(OpDeclSet)
+                                      MbAS
+                                      EqS inclSEEqs
+                                      trRl(getRls(M), getRls(M'))
+                                      ***getStrats(M)
+                                      ***getSds(M)
+                                    endm, upModule('META-LEVEL, true))
+    if mod H is ImpL sorts SortS . SubSortS OpDeclSet MbAS EqS RlS endm := fuseMods(M, M') .
+    
+  op transformModSymb : Module -> Module .
+  eq transformModSymb(M) = fuseMods(trMod(M), upModule('NARROWING-CONV-EXT, true)) .
+
+  op hasEval : TermList -> Bool .
+  eq hasEval(empty)        = false .
+  eq hasEval(MConst)       = false .
+  eq hasEval(MVar)         = false .
+  ***eq hasEval('eval[NeTL])  = true .
+  eq hasEval('eval[NeTL]) = true .
+  eq hasEval(OpId[NeTL])   = hasEval(NeTL) [owise] .
+  eq hasEval((T1, NeTL))  = (hasEval(T1) or hasEval(NeTL)) .
+
+  op toSymb : Qid -> Qid .
+  eq toSymb(OpId) = qid(string(OpId) + "S") .
+endfm
+
+fmod SMT-TRANSFORMER is
+	protecting TRANSFORMER .
+
+	*** Aux from generic transformation
+  vars M M' : Module .
+  vars OpId InstId Q : Qid .
+  vars T1 T2 Tcond : Term .
+  var NeTL : NeTermList .
+  var RlSet : RuleSet .
+  var Rule : Rule .
+  var AttrSet : AttrSet .
+  var OpDeclSet : OpDeclSet .
+  var OpDecl : OpDecl .
+  var NeTypeL : NeTypeList .
+	var Cond : Condition .
+
+  *** Populate inclSorts
+  eq inclSorts = none .
+
+	*** Populate inclOps
+	eq inclOps(OpDeclSet) = inclSmtSt(OpDeclSet) .
+
+	op inclSmtSt : OpDeclSet -> OpDeclSet .
+  eq inclSmtSt(none) = none .
+  *** TODO: Maybe change 'State to 'SEState
+  eq inclSmtSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
+                                                                        (op '_`{_`} : 'State 'Boolean -> 'State [ctor AttrSet] .) 
+                                                                        inclSmtSt(OpDeclSet) . 
+  eq inclSmtSt(OpDecl OpDeclSet) = OpDecl inclSmtSt(OpDeclSet) [owise] .
+
+	*** Populate trRl
+	eq trRl(RlSet) = rlToSMT(RlSet) .
+
+	op rlToSMT : RuleSet ~> RuleSet .
+  eq rlToSMT(none) = none .
+  eq rlToSMT(rl T1 => T2 [label(InstId) AttrSet] . RlSet) = 
+        rl '_`{_`}[T1, 'Constraints:Boolean]
+          => '_`{_`}[T2, 'Constraints:Boolean] 
+          [label(toSymb(InstId)) AttrSet] .
+        rlToSMT(RlSet) .
+  eq rlToSMT(crl T1 => T2 if Tcond = 'true.Boolean [label(InstId) AttrSet] . RlSet) = 
+        crl '_`{_`}[T1, 'Constraints:Boolean]
+          => '_`{_`}[T2, 'Constraints':Boolean]
+          if 'Constraints':Boolean := '_and_['Constraints:Boolean, Tcond]
+          /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool 
+          [label(toSymb(InstId)) AttrSet] .
+        rlToSMT(RlSet) .
+  eq rlToSMT(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet) = 
+        crl '_`{_`}[T1, 'Constraints:Boolean]
+          => '_`{_`}[T2, 'Constraints:Boolean]
+          if Cond
+          [label(toSymb(InstId)) AttrSet] .
+        rlToSMT(RlSet) [owise] .
+  eq rlToSMT(Rule RlSet) = Rule rlToSMT(RlSet) [owise] .
+endfm
+
+fmod NRW-TRANSFORMER is
+	protecting TRANSFORMER .
+
+	*** Aux from generic transformation
+  vars M M' : Module .
+  vars OpId InstId Q : Qid .
+  vars T1 T2 Tcond : Term .
+  var NeTL : NeTermList .
+  var RlSet : RuleSet .
+  var Rule : Rule .
+  var AttrSet : AttrSet .
+  var OpDeclSet : OpDeclSet .
+  var OpDecl : OpDecl .
+  var NeTypeL : NeTypeList .
+
+  *** Populate inclSorts
+  eq inclSorts = none .
+
+	*** Populate inclOps
+	eq inclOps(OpDeclSet) = inclNrwSt(OpDeclSet) .
+
+	op inclNrwSt : OpDeclSet -> OpDeclSet .
+  eq inclNrwSt(none) = none .
+  eq inclNrwSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
+                                                                        (op extNrwSt(Q) : NeTypeL 'BoolFVP -> 'State [ctor AttrSet] .) 
+                                                                        inclNrwSt(OpDeclSet) . 
+  eq inclNrwSt(OpDecl OpDeclSet) = OpDecl inclNrwSt(OpDeclSet) [owise] .
+
+	op extNrwSt : Qid -> Qid .
+  op extNrwSt : Term Term -> Term .
+  eq extNrwSt(Q) = qid(string(Q) + "[_]") .
+  eq extNrwSt(OpId[NeTL], T2) = extNrwSt(OpId)[NeTL, T2] .
+  eq extNrwSt(T1, T2) = T1 [owise] .
+
+	*** Populate trRl
+	eq trRl(RlSet) = rlToNarrowing(RlSet) .
+
+  op rlToNarrowing : RuleSet -> RuleSet .
+  eq rlToNarrowing(none) = none .
+  eq rlToNarrowing(rl T1 => T2 [AttrSet] . RlSet) = rl T1 => T2 [AttrSet narrowing] . rlToNarrowing(RlSet) .
+  eq rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'tt.BoolFVP) [label(InstId) AttrSet] . RlSet) =
+                    (rl T1 => extNrwSt(T1, 'eval[NeTL:NeTermList]) [narrowing AttrSet] .)
+                    (rl extNrwSt(T1, 'tt.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
+                  rlToNarrowing(RlSet) .
+  eq rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'ff.BoolFVP) [label(InstId) AttrSet] . RlSet) =
+                    (rl T1 => extNrwSt(T1, 'eval[NeTL:NeTermList]) [narrowing AttrSet] .)
+                    (rl extNrwSt(T1, 'ff.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
+                  rlToNarrowing(RlSet) .
+  eq rlToNarrowing(crl T1 => T2 if 'not_['eval[NeTL:NeTermList]] = 'tt.BoolFVP [AttrSet] . RlSet) = rlToNarrowing(crl T1 => T2 if ('eval[NeTL:NeTermList] = 'ff.BoolFVP) [AttrSet] . RlSet) .
+  *** Use non eval conditions in narrowing???
+  ceq rlToNarrowing(crl T1 => T2 if (Tcond = 'tt.BoolFVP) [label(InstId) AttrSet] . RlSet) =
+                    (rl T1 => extNrwSt(T1, Tcond) [narrowing AttrSet] .)
+                    (rl extNrwSt(T1, 'tt.BoolFVP) => T2 [label(toSymb(InstId)) narrowing AttrSet] .)
+                  rlToNarrowing(RlSet)
+  if not hasEval(Tcond) .
+  eq rlToNarrowing(Rule RlSet) = Rule rlToNarrowing(RlSet) [owise] .
+endfm
+
+*** TODO: In concolic we need to transform conditions to symbolic 
+***       -> Maybe through metaParse?
+***       -> How to get the module?
+***       -> TODO: Idea: Get rule condition from symbolic semantics by id label
+fmod CONCOLIC-TRANSFORMER is
+	protecting TRANSFORMER .
+
+  sort AssignmentSMT .
+
+  *** Define a satisfying assignment returned by the SMT hook
+  op _<--_ : Real Real                 -> AssignmentSMT [ctor] .
+  op _<--_ : Integer Integer           -> AssignmentSMT [ctor] .
+  op _<--_ : Boolean Boolean           -> AssignmentSMT [ctor] .
+  op _,_ : AssignmentSMT AssignmentSMT -> AssignmentSMT .
+  op failed :                          -> AssignmentSMT [ctor] .
+
+	*** Aux from generic transformation
+  vars M M' : Module .
+  vars OpId InstId Q : Qid .
+  vars T1 T2 T1' T2' Tcond TScond : Term .
+  var NeTL : NeTermList .
+  vars RlSet RlSet' : RuleSet .
+  var Rule : Rule .
+  var AttrSet : AttrSet .
+  var OpDeclSet : OpDeclSet .
+  var OpDecl : OpDecl .
+  var NeTypeL : NeTypeList .
+	vars Cond Cond' : Condition .
+
+  *** Populate inclSorts
+  eq inclSorts = 'SEState ; 'ConcolicState .
+  
+  *** Populate inclOps
+	eq inclOps(OpDeclSet) = (op 'init-CState : 'Term 'Boolean -> 'State [none] .)
+                          inclConcolicSt(OpDeclSet) .
+
+	op inclConcolicSt : OpDeclSet -> OpDeclSet .
+  eq inclConcolicSt(none) = none .
+  *** TODO: Maybe change 'State to 'SEState
+  eq inclConcolicSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
+                                                                             (op '_`{_`} : 'State 'Boolean -> 'SEState [ctor AttrSet] .) 
+                                                                             (op '`[_`]`[_`]`[_`] : 'State 'SEState 'State -> 'ConcolicState [ctor] .)
+                                                                             inclConcolicSt(OpDeclSet) . 
+  eq inclConcolicSt(OpDecl OpDeclSet) = OpDecl inclConcolicSt(OpDeclSet) [owise] .
+
+  *** Operator defined in Python using a hook
+  *** Given a Boolean constraint returns a satisfying assignment to the symbolic variables it may contain
+  op get-SMTassignment : Boolean -> AssignmentSMT [special (id-hook SpecialHubSymbol)] .
+
+  *** Populate inclEqs
+  op inclSEEqs : -> EquationSet .
+  eq inclSEEqs = *** Initialize symbolic variables in a concrete store with concrete values satisfying the accumulated Constraints (concrete store might be pre-initialized)
+                  (eq 'init-CState['T1:Term, 'Constraints:Boolean] = 'downTerm['$apply-SMTassignment['T1:Term, 'get-SMTassignment['Constraints:Boolean]], 'errS.State] [none] .)
+                  ***(eq 'init-CState[stateVar(StateOp, 0), stateVar(StateOp, 1), 'Constraints:Boolean] = '$apply-SMTassignment[stateVar(StateOp, 0), stateVar(StateOp, 1), 'get-SMTassignment['Constraints:Boolean]] [none] .)
+                  *** Fill the gaps in a given concrete store with values satisfying the accumulated constraints. An initial store can only be provided at the beginning, new iterations use empty stores.
+                  *** TODO: Maybe simplfiy with term to term Maude-native assignments (probably change in Python too)
+                  
+                  (eq '$apply-SMTassignment['T1:Term, '_<--_['R:Real, 'Rconc:Real]]       = 'initialize-def['subT['T1:Term, 'upTerm['R:Real], 'upTerm['toRat['Rconc:Real]]]] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_<--_['I:Integer, 'Iconc:Integer]] = 'initialize-def['subT['T1:Term, 'upTerm['I:Integer], 'upTerm['toInt['Iconc:Integer]]]] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_<--_['B:Boolean, 'Bconc:Boolean]] = 'initialize-def['subT['T1:Term, 'upTerm['B:Boolean], 'upTerm['toBool['Bconc:Boolean]]]] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_`,_['_<--_['R:Real, 'Rconc:Real], 'AssignmentSMT:AssignmentSMT]]       = '$apply-SMTassignment['subT['T1:Term, 'upTerm['R:Real], 'upTerm['toRat['Rconc:Real]]], 'AssignmentSMT:AssignmentSMT] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_`,_['_<--_['I:Integer, 'Iconc:Integer], 'AssignmentSMT:AssignmentSMT]] = '$apply-SMTassignment['subT['T1:Term, 'upTerm['I:Integer], 'upTerm['toInt['Iconc:Integer]]], 'AssignmentSMT:AssignmentSMT] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_`,_['_<--_['B:Boolean, 'Bconc:Boolean], 'AssignmentSMT:AssignmentSMT]] = '$apply-SMTassignment['subT['T1:Term, 'upTerm['B:Boolean], 'upTerm['toBool['Bconc:Boolean]]], 'AssignmentSMT:AssignmentSMT] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, 'failed.AssignmentSMT] = 'T1:Term [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_<--_['true.Boolean, 'true.Boolean]] = 'initialize-def['T1:Term] [none] .) 
+                  
+                  (eq 'subT['empty.TermList, 'C:Constant, 'Sub:Term] = 'empty.TermList [none] .)
+                  (eq 'subT['empty.EmptyCommaList, 'C:Constant, 'Sub:Term] = 'empty.TermList [none] .)
+                  (eq 'subT['C:Constant, 'C:Constant, 'Sub:Term] = 'Sub:Term [none] .)
+                  (eq 'subT['V:Variable, 'V:Variable, 'Sub:Term] = 'Sub:Term [none] .)
+                  (eq 'subT['_`[_`]['Q:Sort, 'NeTL:NeTermList], 'T1:Term, 'Sub:Term] = '_`[_`]['Q:Sort, 'subT['NeTL:NeTermList, 'T1:Term, 'Sub:Term]] [none] .)
+                  (eq 'subT['_`,_['T:Term, 'NeTL:NeTermList], 'T1:Term, 'Sub:Term] = '_`,_['subT['T:Term, 'T1:Term, 'Sub:Term], 'subT['NeTL:NeTermList, 'T1:Term, 'Sub:Term]] [none] .)
+                  (eq 'subT['T:Term, 'T1:Term, 'T2:Term] = 'T:Term [owise] .)
+                  
+                  *** Recursively initialize symbolic variables with default values. Yields a concrete state 
+                  (eq 'initialize-def['empty.EmptyCommaList] = 'empty.TermList [none] .)
+                  (eq 'initialize-def['V:Variable] = 'get-def['V:Variable, 'getType['V:Variable]] [none] .)
+                  (eq 'initialize-def['_`[_`]['Q:Sort, 'NeTL:NeTermList]] = '_`[_`]['Q:Sort, 'initialize-def['NeTL:NeTermList]] [none] .)
+                  (eq 'initialize-def['_`[_`]['Q:Variable, 'NeTL:NeTermList]] = '_`[_`]['Q:Variable, 'initialize-def['NeTL:NeTermList]] [none] .)
+                  (eq 'initialize-def['_`,_['T:Term, 'NeTL:NeTermList]] = '_`,_['initialize-def['T:Term], 'initialize-def['NeTL:NeTermList]] [none] .)
+                  (eq 'initialize-def['C:Constant] = 'C:Constant [owise] .)
+
+                  (eq 'get-def['V:Variable, ''Integer.Qid] = ''0.Zero.Constant [none] .)
+                  (eq 'get-def['V:Variable, ''Real.Qid] = ''0.Zero.Constant [none] .)
+                  (eq 'get-def['V:Variable, ''Boolean.Sort] = ''true.Bool.Constant [none] .)
+                  
+                  *** Boolean simplification
+                  (eq 'not_['not_['B:Boolean]] = 'B:Boolean [none] .) .
+
+	*** Populate trRl
+	eq trRl(RlSet, RlSet') = rlToConcolic(RlSet, RlSet') .
+
+  op rlToConcolic : RuleSet RuleSet -> RuleSet .
+  eq rlToConcolic(none, RlSet') = none .
+  *** Transform unconditional rules
+  eq rlToConcolic(rl T1 => T2 [label(InstId) AttrSet] . RlSet, 
+                  rl T1' => T2' [label(InstId) AttrSet] . RlSet') =
+        (rl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
+          =>
+          '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints:Boolean], 'S:State]
+          [AttrSet] .)
+        rlToConcolic(RlSet, RlSet') .
+  *** Transform conditional rules to two concolic rules
+  *** - Conditional rule 1: Advances the state with the concrete condition Cond and appends Cond to the accumulated Constraints
+  *** - Conditional rule 2: Appends not(Cond) to the accumulated Constraints and, if Constraints is satisfiable, re-starts the execution with the new Constraints
+  ***                       Re-executing requires re-initializing the concrete store with new satisfying values retrieved from the SMT hook, and resetting the symbolic store
+
+  *** TODO: Generalize again the conditions to handle composite ones (merge eval(...) and (not eval(...)) condition transformations)
+  ceq rlToConcolic(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet,
+                   crl T1' => T2' if Cond' [label(InstId) AttrSet] . RlSet') =
+        (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
+          =>
+          '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints':Boolean], 'S:State]
+          if Cond
+          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, TScond]
+          [label(InstId) AttrSet] .)
+        (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
+          =>
+          '`[_`]`[_`]`[_`]['init-CState['upTerm['S:State], 'Constraints':Boolean],
+                              '_`{_`}['S:State, 'Constraints':Boolean],
+                              'S:State]
+          if Cond
+          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_[TScond]]
+          /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
+          [label(qid(string(InstId) + "-bis")) AttrSet] .)
+        rlToConcolic(RlSet, RlSet')
+      if (Tcond = 'true.Bool) := Cond
+      /\ hasEval(Tcond)
+      /\ (TScond = 'true.Boolean) := Cond' .
+      ***if (Tcond = 'true.Bool) := Cond
+      ***/\ hasEval(Tcond)
+      ****** TODO: Generalize again the conditions to handle composite ones
+      ***/\ Q[Texp, Tstate] := Tcond
+      ***/\ TScond := modSEOpIds(Q)[Texp, T1]
+  --- ceq rlToConcolic(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet) =
+  ---       (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1, 'Constraints:Boolean], 'S:State]
+  ---         =>
+  ---         '`[_`]`[_`]`[_`][T2, '_`{_`}[T2, 'Constraints':Boolean], 'S:State]
+  ---         if Cond
+  ---         /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, TScond]
+  ---         [label(InstId) AttrSet] .)
+  ---       (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1, 'Constraints:Boolean], 'S:State]
+  ---         =>
+  ---         '`[_`]`[_`]`[_`]['init-CState['upTerm['S:State], 'Constraints':Boolean],
+  ---                             '_`{_`}['S:State, 'Constraints':Boolean],
+  ---                             'S:State]
+  ---         if Cond
+  ---         /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_[TScond]]
+  ---         /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
+  ---         [label(qid(string(InstId) + "-bis")) AttrSet] .)
+  ---       rlToConcolic(RlSet)
+  ---     if (Tcond = 'true.Bool) := Cond
+  ---     /\ hasEval(Tcond) .
+      *** TODO: Generalize again the conditions to handle composite ones
+      ***/\ 'not_[Q[Texp, Tstate]] := Tcond
+      ***/\ TScond := 'not_[modSEOpIds(Q)[Texp, T1]]
+
+      ***if ('not_[Q[Texp, Tstate]] = 'true.Bool) := downTerm(getTerm(metaReduce(upModule('TRANSFORMED-MOD, true), upTerm(getEvalCond(Cond)))), nil)
+      ***/\ hasEval(Tcond)
+      *** TODO: Generalize again the conditions to handle composite ones
+      ***/\ 'not_[Q[Texp, Tstate]] := Tcond
+      ***/\ TScond := 'not_[modSEOpIds(Q)[Texp, T1]] .
+  
+  eq rlToConcolic(crl T1 => T2 if Cond [AttrSet] . RlSet,
+                  crl T1' => T2' if Cond' [AttrSet] . RlSet') = 
+        (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
+          =>
+          '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints:Boolean], 'S:State]
+          if Cond
+          [AttrSet] .)
+        rlToConcolic(RlSet, RlSet') [owise] .
+endfm
