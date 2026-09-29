@@ -13,18 +13,38 @@ fmod SI1-C-VALUES is
 
 	*** R: This can be directly Int!! Or define operators for each sort
 	sorts IValC BValC RValC .
-	***subsorts Bool < BValC .
-	***subsorts Int < IValC .
-	***op bval : Bool -> BValC [ctor] .
-	***op ival : Int -> IValC [ctor] .
+	subsorts Bool < BValC .
+	subsorts Int < IValC .
+	subsorts Rat < RValC .
+	subsorts IValC < RValC .
+	op bval : Bool -> BValC .
+	op ival : Int -> IValC .
+	op rval : Rat -> RValC .
+
+	var B : Bool .
+	var I : Int .
+	var R : Rat .
+	eq bval(B) = B .
+	eq ival(I) = I .
+	eq rval(R) = R .
 endfm
 
+*** Version where semantic values are directly Maude types
 view SI1base from SEMANTIC-TYPES to SI1-C-VALUES is
 	sort BVal to Bool .
 	op tt to true .
 	op ff to false .
 	sort IVal to Int .
 	sort RVal to Rat .
+endv
+
+*** Version where semantic values are wrapped Maude-typed values
+view SI1base' from SEMANTIC-TYPES to SI1-C-VALUES is
+	sort BVal to Bool .
+	op tt to true .
+	op ff to false .
+	sort IVal to IValC .
+	sort RVal to RValC .
 endv
 
 fmod SI1-C-EVAL is

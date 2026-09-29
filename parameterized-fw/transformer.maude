@@ -64,7 +64,7 @@ fmod TRANSFORMER is
   op inclSEEqs : -> EquationSet .
 	op trRl : RuleSet -> RuleSet .
   *** Concolic tranformation
-	op trRl : RuleSet RuleSet -> RuleSet .
+	op trRl : RuleSet RuleSet Module Module -> RuleSet .
 
 	op trMod : Module -> Module .
 	eq trMod(M) = mod 'TRANSFORMED-MOD is
@@ -86,7 +86,7 @@ fmod TRANSFORMER is
                                       inclOps(OpDeclSet)
                                       MbAS
                                       EqS inclSEEqs
-                                      trRl(getRls(M), getRls(M'))
+                                      trRl(getRls(M), getRls(M'), M, M')
                                       ***getStrats(M)
                                       ***getSds(M)
                                     endm, upModule('META-SMT-HOOK, true))
@@ -246,7 +246,7 @@ fmod CONCOLIC-TRANSFORMER is
   eq inclSorts = 'SEState ; 'ConcolicState .
   
   *** Populate inclOps
-	eq inclOps(OpDeclSet) = (op 'init-CState : 'Term 'Boolean -> 'State [none] .)
+	eq inclOps(OpDeclSet) = (op 'init-CState : 'Term 'Boolean 'Module 'Module -> 'State [none] .)
                           (op '$apply-SMTassignment : 'Term 'AssignmentSMT -> 'Term [none] .)
                           *** Initialize a concrete store with default values from a symbolic store
                           (op 'initialize-def : 'Term -> 'Term [none] .)
@@ -255,6 +255,7 @@ fmod CONCOLIC-TRANSFORMER is
                           *** Substitute a term t2 by t1 in t0
                           (op 'subT : 'TermList 'Term 'Term -> 'Term [none] .)
                           (op 'errS : nil -> 'State [ctor] .)
+                          (op 'reparse : 'Module 'Module 'Term -> 'State [ctor] .)
                           inclConcolicSt(OpDeclSet) .
 
 	op inclConcolicSt : OpDeclSet -> OpDeclSet .
@@ -269,14 +270,17 @@ fmod CONCOLIC-TRANSFORMER is
   *** Populate inclEqs
   op inclSEEqs : -> EquationSet .
   eq inclSEEqs = *** Initialize symbolic variables in a concrete store with concrete values satisfying the accumulated Constraints (concrete store might be pre-initialized)
-                  (eq 'init-CState['T1:Term, 'Constraints:Boolean] = 'downTerm['$apply-SMTassignment['T1:Term, 'get-SMTassignment['Constraints:Boolean]], 'errS.State] [none] .)
+                  (eq 'init-CState['T1:Term, 'Constraints:Boolean, 'M:Module, 'M':Module] = 'reparse['M:Module, 'M':Module, '$apply-SMTassignment['T1:Term, 'get-SMTassignment['Constraints:Boolean]]] [none] .)
+                  *** Reparse a term T in module M' into module M
+                  *** NOTE: Only works if operators of runtime structures have not been renamed when importing symbolic module!!
+                  (eq 'reparse['M:Module, 'M':Module, 'T:Term] = 'downTerm['getTerm['metaParse['M:Module, 'metaPrettyPrint['M':Module, 'T:Term, 'mixfix.PrintOption], 'anyType.Type?]], 'errS.State] [none] .)
                   ***(eq 'init-CState[stateVar(StateOp, 0), stateVar(StateOp, 1), 'Constraints:Boolean] = '$apply-SMTassignment[stateVar(StateOp, 0), stateVar(StateOp, 1), 'get-SMTassignment['Constraints:Boolean]] [none] .)
                   *** Fill the gaps in a given concrete store with values satisfying the accumulated constraints. An initial store can only be provided at the beginning, new iterations use empty stores.
                   *** TODO: Maybe simplfiy with term to term Maude-native assignments (probably change in Python too)
                   
-                  (eq '$apply-SMTassignment['T1:Term, '_<--_['R:Real, 'Rconc:Real]]       = 'initialize-def['subT['T1:Term, 'upTerm['R:Real], 'upTerm['toRat['Rconc:Real]]]] [none] .)
-                  (eq '$apply-SMTassignment['T1:Term, '_<--_['I:Integer, 'Iconc:Integer]] = 'initialize-def['subT['T1:Term, 'upTerm['I:Integer], 'upTerm['toInt['Iconc:Integer]]]] [none] .)
-                  (eq '$apply-SMTassignment['T1:Term, '_<--_['B:Boolean, 'Bconc:Boolean]] = 'initialize-def['subT['T1:Term, 'upTerm['B:Boolean], 'upTerm['toBool['Bconc:Boolean]]]] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_<--_['R:Real, 'Rconc:Real]]       = 'initialize-def['subT['T1:Term, 'upTerm['R:Real], 'upTerm['Rconc:Real]]] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_<--_['I:Integer, 'Iconc:Integer]] = 'initialize-def['subT['T1:Term, 'upTerm['I:Integer], 'upTerm['Iconc:Integer]]] [none] .)
+                  (eq '$apply-SMTassignment['T1:Term, '_<--_['B:Boolean, 'Bconc:Boolean]] = 'initialize-def['subT['T1:Term, 'upTerm['B:Boolean], 'upTerm['Bconc:Boolean]]] [none] .)
                   (eq '$apply-SMTassignment['T1:Term, '_`,_['_<--_['R:Real, 'Rconc:Real], 'AssignmentSMT:AssignmentSMT]]       = '$apply-SMTassignment['subT['T1:Term, 'upTerm['R:Real], 'upTerm['toRat['Rconc:Real]]], 'AssignmentSMT:AssignmentSMT] [none] .)
                   (eq '$apply-SMTassignment['T1:Term, '_`,_['_<--_['I:Integer, 'Iconc:Integer], 'AssignmentSMT:AssignmentSMT]] = '$apply-SMTassignment['subT['T1:Term, 'upTerm['I:Integer], 'upTerm['toInt['Iconc:Integer]]], 'AssignmentSMT:AssignmentSMT] [none] .)
                   (eq '$apply-SMTassignment['T1:Term, '_`,_['_<--_['B:Boolean, 'Bconc:Boolean], 'AssignmentSMT:AssignmentSMT]] = '$apply-SMTassignment['subT['T1:Term, 'upTerm['B:Boolean], 'upTerm['toBool['Bconc:Boolean]]], 'AssignmentSMT:AssignmentSMT] [none] .)
@@ -307,18 +311,18 @@ fmod CONCOLIC-TRANSFORMER is
                   (eq 'not_['not_['B:Boolean]] = 'B:Boolean [none] .) .
 
 	*** Populate trRl
-	eq trRl(RlSet, RlSet') = rlToConcolic(RlSet, RlSet') .
+	eq trRl(RlSet, RlSet', M, M') = rlToConcolic(RlSet, RlSet', M, M') .
 
-  op rlToConcolic : RuleSet RuleSet -> RuleSet .
-  eq rlToConcolic(none, RlSet') = none .
+  op rlToConcolic : RuleSet RuleSet Module Module -> RuleSet .
+  eq rlToConcolic(none, RlSet', M, M') = none .
   *** Transform unconditional rules
   eq rlToConcolic(rl T1 => T2 [label(InstId) AttrSet] . RlSet, 
-                  rl T1' => T2' [label(InstId) AttrSet] . RlSet') =
+                  rl T1' => T2' [label(InstId) AttrSet] . RlSet', M, M') =
         (rl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
           =>
           '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints:Boolean], 'S:State]
           [AttrSet] .)
-        rlToConcolic(RlSet, RlSet') .
+        rlToConcolic(RlSet, RlSet', M, M') .
   *** Transform conditional rules to two concolic rules
   *** - Conditional rule 1: Advances the state with the concrete condition Cond and appends Cond to the accumulated Constraints
   *** - Conditional rule 2: Appends not(Cond) to the accumulated Constraints and, if Constraints is satisfiable, re-starts the execution with the new Constraints
@@ -326,7 +330,7 @@ fmod CONCOLIC-TRANSFORMER is
 
   *** TODO: Generalize again the conditions to handle composite ones (merge eval(...) and (not eval(...)) condition transformations)
   ceq rlToConcolic(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet,
-                   crl T1' => T2' if Cond' [label(InstId) AttrSet] . RlSet') =
+                   crl T1' => T2' if Cond' [label(InstId) AttrSet] . RlSet', M, M') =
         (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
           =>
           '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints':Boolean], 'S:State]
@@ -335,22 +339,43 @@ fmod CONCOLIC-TRANSFORMER is
           [label(InstId) AttrSet] .)
         (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
           =>
-          '`[_`]`[_`]`[_`]['init-CState['upTerm['S:State], 'Constraints':Boolean],
+          '`[_`]`[_`]`[_`]['init-CState['upTerm['S:State], 'Constraints':Boolean, upTerm(M), upTerm(M')],
                               '_`{_`}['S:State, 'Constraints':Boolean],
                               'S:State]
           if Cond
           /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_[TScond]]
           /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
           [label(qid(string(InstId) + "-bis")) AttrSet] .)
-        rlToConcolic(RlSet, RlSet')
+        rlToConcolic(RlSet, RlSet', M, M')
       if (Tcond = 'true.Bool) := Cond
       /\ hasEval(Tcond)
-      /\ (TScond = 'true.Boolean) := Cond' .
+      /\ (TScond = 'true.Boolean) := Cond' [owise] .
       ***if (Tcond = 'true.Bool) := Cond
       ***/\ hasEval(Tcond)
       ****** TODO: Generalize again the conditions to handle composite ones
       ***/\ Q[Texp, Tstate] := Tcond
       ***/\ TScond := modSEOpIds(Q)[Texp, T1]
+    ceq rlToConcolic(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet,
+                   crl T1' => T2' if Cond' [label(InstId) AttrSet] . RlSet', M, M') =
+        (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
+          =>
+          '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints':Boolean], 'S:State]
+          if Cond
+          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, TScond]
+          [label(InstId) AttrSet] .)
+        (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
+          =>
+          '`[_`]`[_`]`[_`]['init-CState['upTerm['S:State], 'Constraints':Boolean, upTerm(M), upTerm(M')],
+                              '_`{_`}['S:State, 'Constraints':Boolean],
+                              'S:State]
+          if Cond
+          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_[TScond]]
+          /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
+          [label(qid(string(InstId) + "-bis")) AttrSet] .)
+        rlToConcolic(RlSet, RlSet', M, M')
+      if ('not_[Tcond] = 'true.Bool) := Cond
+      /\ hasEval(Tcond)
+      /\ (TScond = 'true.Boolean) := Cond' .
   --- ceq rlToConcolic(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet) =
   ---       (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1, 'Constraints:Boolean], 'S:State]
   ---         =>
@@ -381,11 +406,11 @@ fmod CONCOLIC-TRANSFORMER is
       ***/\ TScond := 'not_[modSEOpIds(Q)[Texp, T1]] .
   
   eq rlToConcolic(crl T1 => T2 if Cond [AttrSet] . RlSet,
-                  crl T1' => T2' if Cond' [AttrSet] . RlSet') = 
+                  crl T1' => T2' if Cond' [AttrSet] . RlSet', M, M') = 
         (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
           =>
           '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints:Boolean], 'S:State]
           if Cond
           [AttrSet] .)
-        rlToConcolic(RlSet, RlSet') [owise] .
+        rlToConcolic(RlSet, RlSet', M, M') [owise] .
 endfm

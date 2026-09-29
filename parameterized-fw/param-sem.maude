@@ -261,11 +261,24 @@ mod TEST-SI-CONCOLIC is
 	eq initConcolic(Str) = '`[_`]`[_`]`[_`][
 								getTerm(metaParse(['SEMANTIC-SI1], tokenize(Str), 'State)), 
 								'_`{_`}[getTerm(metaParse(['SEMANTIC-SI2'], tokenize(Str), 'State)), 'true.Boolean], 
-								getTerm(metaParse(['SEMANTIC-SI1], tokenize(Str), 'State))] .
+								getTerm(metaParse(['SEMANTIC-SI1], tokenize(Str), 'State))] . *** Should it be 'SEMANTIC-SI2'??
 
     *** red in TEST-SI-CONCOLIC : metaSearch(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), initConcolic("< var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) >"), 'S:ConcolicState, nil, '*, unbounded, 0) .
     *** Test final states reasoning over p:Integer
-	*** TODO: Generate initial concolic state based on input symbolic variable -> TEST!!
+	*** TODO: Generate initial concolic state based on input symbolic variable -> TEST from Python or maude-shell!!
+	*** red in TEST-SI-CONCOLIC : metaSearch(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), '`[_`]`[_`]`[_`]['<_|_>['__['_:=_;['var[''x.Qid], '_+_['val['s_^2['0.Zero]], 'val['s_^3['0.Zero]]]], 'if_then`{_`}else`{_`}['_>_['iref['var[''x.Qid]], 'iref['var[''y.Qid]]], '_:=_;['var[''z.Qid], 'val['true.Bool]], '_:=_;['var[''z.Qid], 'val['false.Bool]]]], '_|_|_['empty.BStore, '_|->I_[''y.Qid, '0.Zero], 'empty.RStore]], '_`{_`}['<_|_>['__['_:=_;['var[''x.Sort], '_+_['val['s_^2['0.Zero]], 'val['s_^3['0.Zero]]]], 'if_then`{_`}else`{_`}['_>_['iref['var[''x.Sort]], 'iref['var[''y.Sort]]], '_:=_;['var[''z.Sort], 'val['true.Bool]], '_:=_;['var[''z.Sort], 'val['false.Bool]]]], '_|_|_['empty.BStoreS, '_|->I_[''y.Qid, 'ival['p:Integer]], 'empty.RStoreS]], 'true.Boolean], '<_|_>['__['_:=_;['var[''x.Qid], '_+_['val['s_^2['0.Zero]], 'val['s_^3['0.Zero]]]], 'if_then`{_`}else`{_`}['_>_['iref['var[''x.Qid]], 'iref['var[''y.Qid]]], '_:=_;['var[''z.Qid], 'val['true.Bool]], '_:=_;['var[''z.Qid], 'val['false.Bool]]]], '_|_|_['empty.BStore, 'empty.IStore, 'empty.RStore]]], 'S:ConcolicState, nil, '*, unbounded, 0) .
+
+
+	*** red in TEST-SI-CONCOLIC : metaPrettyPrint(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), upTerm('_|_|_['empty.BStoreS, '_|->I_[''y.Sort, 'ival['s_^5['0.Zero]]], 'empty.RStoreS])) .
+	*** red in TEST-SI-CONCOLIC : metaParse(upModule('SEMANTIC-SI1, true), metaPrettyPrint(upModule('SEMANTIC-SI2'', true), upTerm('_|_|_['empty.BStoreS, '_|->I_[''y.Sort, 'ival['s_^5['0.Zero]]], 'empty.RStoreS])), 'Store) .
+
+	*** red in TEST-SI-CONCOLIC : metaPrettyPrint(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), upTerm('_|_|_['empty.BStoreS, '_|->I_[''y.Sort, 'ival['s_^5['0.Zero]]], 'empty.RStoreS])) .
+
+	*** red in TEST-SI-CONCOLIC : metaParse(upModule('SEMANTIC-SI1, true), metaPrettyPrint(upModule('SEMANTIC-SI2', true), '_|_|_['empty.BStoreS, '_|->I_[''y.Sort, 'ival['5.Integer]], 'empty.RStoreS], mixfix), anyType) .
+
+	*** red in TEST-SI-CONCOLIC : downTerm(getTerm(metaParse(upModule('SEMANTIC-SI1, true), metaPrettyPrint(upModule('SEMANTIC-SI2', true), '_|_|_['empty.BStoreS, '_|->I_[''y.Sort, 'ival['5.Integer]], 'empty.RStoreS], mixfix), anyType)), err:Store) .
+
+	*** red in TEST-SI-CONCOLIC : metaReduce(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), 'reparse['upModule[''SEMANTIC-SI1.Sort, 'true.Bool], 'upModule[''SEMANTIC-SI2'.Sort, 'true.Bool], upTerm('<_|_>['__['_:=_;['var[''x.Qid], '_+_['val['s_^2['0.Zero]], 'val['s_^3['0.Zero]]]], 'if_then`{_`}else`{_`}['_>_['iref['var[''x.Qid]], 'iref['var[''y.Qid]]], '_:=_;['var[''z.Qid], 'val['true.Bool]], '_:=_;['var[''z.Qid], 'val['false.Bool]]]], '_|_|_['empty.BStoreS, '_|->I_[''y.Sort, 'ival['5.Integer]], 'empty.RStoreS]])]) .
 
 	*** NOTE: When gettying Advisory: could not find sort Sort in meta-module REAL-INTEGER.
 	*** - Cause: typicallly operator is not defined for datatype and/or eval not defined for operator 
