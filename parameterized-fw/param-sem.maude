@@ -105,8 +105,7 @@ mod SEMANTIC-RULES{X :: SEMANTIC-EVAL} is
 					=> 
 					< P | (BSTR | ISTR | insert(Q, eval(RExp, < nil | (BSTR | ISTR | RSTR) >), RSTR)) > .
 
-	*** NOTE: The condition is type BVal...
-	*** TODO: How to include metaCheck and [narrowing]?? -> Transformation
+	*** NOTE: The condition is type BVal
     crl [if-then] : 
         < if BExp then { P1 } else { P2 } P | STR >
         =>
@@ -261,7 +260,7 @@ mod TEST-SI-CONCOLIC is
 	eq initConcolic(Str) = '`[_`]`[_`]`[_`][
 								getTerm(metaParse(['SEMANTIC-SI1], tokenize(Str), 'State)), 
 								'_`{_`}[getTerm(metaParse(['SEMANTIC-SI2'], tokenize(Str), 'State)), 'true.Boolean], 
-								getTerm(metaParse(['SEMANTIC-SI1], tokenize(Str), 'State))] . *** Should it be 'SEMANTIC-SI2'??
+								getTerm(metaParse(['SEMANTIC-SI2'], tokenize(Str), 'State))] .
 
     *** red in TEST-SI-CONCOLIC : metaSearch(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), initConcolic("< var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) >"), 'S:ConcolicState, nil, '*, unbounded, 0) .
     *** Test final states reasoning over p:Integer
@@ -279,6 +278,10 @@ mod TEST-SI-CONCOLIC is
 	*** red in TEST-SI-CONCOLIC : downTerm(getTerm(metaParse(upModule('SEMANTIC-SI1, true), metaPrettyPrint(upModule('SEMANTIC-SI2', true), '_|_|_['empty.BStoreS, '_|->I_[''y.Sort, 'ival['5.Integer]], 'empty.RStoreS], mixfix), anyType)), err:Store) .
 
 	*** red in TEST-SI-CONCOLIC : metaReduce(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), 'reparse['upModule[''SEMANTIC-SI1.Sort, 'true.Bool], 'upModule[''SEMANTIC-SI2'.Sort, 'true.Bool], upTerm('<_|_>['__['_:=_;['var[''x.Qid], '_+_['val['s_^2['0.Zero]], 'val['s_^3['0.Zero]]]], 'if_then`{_`}else`{_`}['_>_['iref['var[''x.Qid]], 'iref['var[''y.Qid]]], '_:=_;['var[''z.Qid], 'val['true.Bool]], '_:=_;['var[''z.Qid], 'val['false.Bool]]]], '_|_|_['empty.BStoreS, '_|->I_[''y.Sort, 'ival['5.Integer]], 'empty.RStoreS]])]) .
+
+	*** select TEST-SI-CONCOLIC .
+	*** select concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)) .
+	*** search [< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStore | 'y |->I (0).Zero | (empty).RStore) >][< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStoreS | 'y |->I ival(p:Integer) | (empty).RStoreS) > {(true).Boolean}][< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStoreS | 'y |->I ival(p:Integer) | (empty).RStoreS) >] =>! S:ConcolicState .
 
 	*** NOTE: When gettying Advisory: could not find sort Sort in meta-module REAL-INTEGER.
 	*** - Cause: typicallly operator is not defined for datatype and/or eval not defined for operator 

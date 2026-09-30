@@ -23,8 +23,6 @@ endfm
 
 fmod TRANSFORMER is
 
-	*** TODO: Move to separate file
-
 	*** Adapted from previous version of transformation
 
 	protecting META-LEVEL .
@@ -86,6 +84,7 @@ fmod TRANSFORMER is
                                       inclOps(OpDeclSet)
                                       MbAS
                                       EqS inclSEEqs
+                                      *** TODO: Maybe better to propagate module Qids, not the full module?
                                       trRl(getRls(M), getRls(M'), M, M')
                                       ***getStrats(M)
                                       ***getSds(M)
@@ -222,17 +221,15 @@ fmod NRW-TRANSFORMER is
   eq rlToNarrowing(Rule RlSet) = Rule rlToNarrowing(RlSet) [owise] .
 endfm
 
-*** TODO: In concolic we need to transform conditions to symbolic 
-***       -> Maybe through metaParse?
-***       -> How to get the module?
-***       -> TODO: Idea: Get rule condition from symbolic semantics by id label
+*** NOTE: In concolic we need to transform conditions to symbolic
+***       -> Get rule condition from symbolic semantics by id label
 fmod CONCOLIC-TRANSFORMER is
 	protecting TRANSFORMER .
 
 	*** Aux from generic transformation
   vars M M' : Module .
   vars OpId InstId Q : Qid .
-  vars T1 T2 T1' T2' Tcond TScond : Term .
+  vars T1 T2 T1' T2' Tcond TScond TRHS TRHS' : Term .
   var NeTL : NeTermList .
   vars RlSet RlSet' : RuleSet .
   var Rule : Rule .
@@ -260,7 +257,6 @@ fmod CONCOLIC-TRANSFORMER is
 
 	op inclConcolicSt : OpDeclSet -> OpDeclSet .
   eq inclConcolicSt(none) = none .
-  *** TODO: Maybe change 'State to 'SEState
   eq inclConcolicSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
                                                                              (op '_`{_`} : 'State 'Boolean -> 'SEState [ctor AttrSet] .) 
                                                                              (op '`[_`]`[_`]`[_`] : 'State 'SEState 'State -> 'ConcolicState [ctor] .)
@@ -335,7 +331,7 @@ fmod CONCOLIC-TRANSFORMER is
           =>
           '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints':Boolean], 'S:State]
           if Cond
-          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, TScond]
+          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, '_===_[TScond, TRHS']]
           [label(InstId) AttrSet] .)
         (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
           =>
@@ -343,67 +339,36 @@ fmod CONCOLIC-TRANSFORMER is
                               '_`{_`}['S:State, 'Constraints':Boolean],
                               'S:State]
           if Cond
-          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_[TScond]]
+          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_['_===_[TScond, TRHS']]]
           /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
           [label(qid(string(InstId) + "-bis")) AttrSet] .)
         rlToConcolic(RlSet, RlSet', M, M')
-      if (Tcond = 'true.Bool) := Cond
-      /\ hasEval(Tcond)
-      /\ (TScond = 'true.Boolean) := Cond' [owise] .
-      ***if (Tcond = 'true.Bool) := Cond
-      ***/\ hasEval(Tcond)
-      ****** TODO: Generalize again the conditions to handle composite ones
-      ***/\ Q[Texp, Tstate] := Tcond
-      ***/\ TScond := modSEOpIds(Q)[Texp, T1]
-    ceq rlToConcolic(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet,
-                   crl T1' => T2' if Cond' [label(InstId) AttrSet] . RlSet', M, M') =
-        (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
-          =>
-          '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints':Boolean], 'S:State]
-          if Cond
-          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, TScond]
-          [label(InstId) AttrSet] .)
-        (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
-          =>
-          '`[_`]`[_`]`[_`]['init-CState['upTerm['S:State], 'Constraints':Boolean, upTerm(M), upTerm(M')],
-                              '_`{_`}['S:State, 'Constraints':Boolean],
-                              'S:State]
-          if Cond
-          /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_[TScond]]
-          /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
-          [label(qid(string(InstId) + "-bis")) AttrSet] .)
-        rlToConcolic(RlSet, RlSet', M, M')
-      if ('not_[Tcond] = 'true.Bool) := Cond
-      /\ hasEval(Tcond)
-      /\ (TScond = 'true.Boolean) := Cond' .
-  --- ceq rlToConcolic(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet) =
-  ---       (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1, 'Constraints:Boolean], 'S:State]
-  ---         =>
-  ---         '`[_`]`[_`]`[_`][T2, '_`{_`}[T2, 'Constraints':Boolean], 'S:State]
-  ---         if Cond
-  ---         /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, TScond]
-  ---         [label(InstId) AttrSet] .)
-  ---       (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1, 'Constraints:Boolean], 'S:State]
-  ---         =>
-  ---         '`[_`]`[_`]`[_`]['init-CState['upTerm['S:State], 'Constraints':Boolean],
-  ---                             '_`{_`}['S:State, 'Constraints':Boolean],
-  ---                             'S:State]
-  ---         if Cond
-  ---         /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_[TScond]]
-  ---         /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
-  ---         [label(qid(string(InstId) + "-bis")) AttrSet] .)
-  ---       rlToConcolic(RlSet)
-  ---     if (Tcond = 'true.Bool) := Cond
-  ---     /\ hasEval(Tcond) .
       *** TODO: Generalize again the conditions to handle composite ones
-      ***/\ 'not_[Q[Texp, Tstate]] := Tcond
-      ***/\ TScond := 'not_[modSEOpIds(Q)[Texp, T1]]
-
-      ***if ('not_[Q[Texp, Tstate]] = 'true.Bool) := downTerm(getTerm(metaReduce(upModule('TRANSFORMED-MOD, true), upTerm(getEvalCond(Cond)))), nil)
-      ***/\ hasEval(Tcond)
-      *** TODO: Generalize again the conditions to handle composite ones
-      ***/\ 'not_[Q[Texp, Tstate]] := Tcond
-      ***/\ TScond := 'not_[modSEOpIds(Q)[Texp, T1]] .
+      *** TODO: Handle := and => cases
+      if (Tcond = TRHS) := Cond
+      /\ hasEval(Tcond)
+      /\ (TScond = TRHS') := Cond' .
+    --- ceq rlToConcolic(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet,
+    ---                crl T1' => T2' if Cond' [label(InstId) AttrSet] . RlSet', M, M') =
+    ---     (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
+    ---       =>
+    ---       '`[_`]`[_`]`[_`][T2, '_`{_`}[T2', 'Constraints':Boolean], 'S:State]
+    ---       if Cond
+    ---       /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, TScond]
+    ---       [label(InstId) AttrSet] .)
+    ---     (crl '`[_`]`[_`]`[_`][T1, '_`{_`}[T1', 'Constraints:Boolean], 'S:State]
+    ---       =>
+    ---       '`[_`]`[_`]`[_`]['init-CState['upTerm['S:State], 'Constraints':Boolean, upTerm(M), upTerm(M')],
+    ---                           '_`{_`}['S:State, 'Constraints':Boolean],
+    ---                           'S:State]
+    ---       if Cond
+    ---       /\ 'Constraints':Boolean := '_and_['Constraints:Boolean, 'not_[TScond]]
+    ---       /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
+    ---       [label(qid(string(InstId) + "-bis")) AttrSet] .)
+    ---     rlToConcolic(RlSet, RlSet', M, M')
+    ---   if ('not_[Tcond] = 'true.Bool) := Cond
+    ---   /\ hasEval(Tcond)
+    ---   /\ (TScond = 'true.Boolean) := Cond' .
   
   eq rlToConcolic(crl T1 => T2 if Cond [AttrSet] . RlSet,
                   crl T1' => T2' if Cond' [AttrSet] . RlSet', M, M') = 
