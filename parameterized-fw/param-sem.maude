@@ -5,7 +5,6 @@ load components-impl.maude
 ***
 
 fmod LANGUAGE is
-	extending LANGUAGE-INFRASTRUCTURE .
 	protecting EXPRESSION .
 	protecting INT .
 	protecting QID .
@@ -117,10 +116,18 @@ mod SEMANTIC-RULES{X :: SEMANTIC-EVAL} is
         =>
         < P2 P | STR >
         if (not eval(BExp, < nil | STR >)) = tt .
-    *** R: Moved here from below but maybe bettwer below...
-	*** Extiende ecuacionalmente la función de evaluación
-	
-	***eq eval(iref(R:Reference), S:State) = iresolve(R:Reference, S:State) .
+    
+	crl [while-do] : 
+        < while BExp do { P1 } P | STR >
+        =>
+        < P1 P | STR >
+        if eval(BExp, < nil | STR >) = tt .
+
+    crl [while-exit] : 
+        < while BExp do { P1 } P | STR >
+        =>
+        < P | STR >
+        if (not eval(BExp, < nil | STR >)) = tt .
 endm
 
 ***
@@ -204,11 +211,16 @@ mod TEST-SI2 is
 
 endm
 
+*** TODO: Test make command for module transformation
+*** make in NRW-TRANSFORMER : TRANSFORMED-MOD is transformModSymb(SEMANTIC-SI3) endm .
+
+
 mod TEST-SI3 is
 	*** TODO: TEST
 
 	protecting SEMANTIC-SI3 .
 	protecting NRW-TRANSFORMER .
+	***protecting TRANSFORMED-MOD .
 
 	op TEST1 : -> State [ctor] .
 
