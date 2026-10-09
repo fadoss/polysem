@@ -65,12 +65,16 @@ fmod SI1-C-EVAL is
 	
 	op eval : IExp State -> Int .
 	eq eval(val(I:Int), S:State) = I:Int .
+	eq eval(- I1:IExp, S:State) = - eval(I1:IExp, S:State) .
 	eq eval(I1:IExp + I2:IExp, S:State) = eval(I1:IExp, S:State) + eval(I2:IExp, S:State) .
+	eq eval(I1:IExp - I2:IExp, S:State) = eval(I1:IExp, S:State) + (- eval(I2:IExp, S:State)) .
 	***eq eval(val(I:Int), S:State) = ival(I:Int) .
 
 	op eval : RExp State -> Rat .
 	eq eval(val(R:Rat), S:State) = R:Rat .
+	eq eval(- R1:RExp, S:State) = - eval(R1:RExp, S:State) .
 	eq eval(R1:RExp + R2:RExp, S:State) = eval(R1:RExp, S:State) + eval(R2:RExp, S:State) .
+	eq eval(R1:RExp - R2:RExp, S:State) = eval(R1:RExp, S:State) + (- eval(R2:RExp, S:State)) .
 	***eq eval(val(I:Int), S:State) = ival(I:Int) .
 endfm
 
@@ -114,6 +118,14 @@ fmod SI2-SMT-VALUES is
 	eq ival(I1:Integer) + ival(I2:Integer) = ival(I1:Integer + I2:Integer) .
 	op _+_ : RValS RValS -> RValS .
 	eq rval(R1:Real) + rval(R2:Real) = rval(R1:Real + R2:Real) .
+	op _-_ : IValS IValS -> IValS .
+	eq ival(I1:Integer) - ival(I2:Integer) = ival(I1:Integer - I2:Integer) .
+	op _-_ : RValS RValS -> RValS .
+	eq rval(R1:Real) - rval(R2:Real) = rval(R1:Real - R2:Real) .
+	op -_ : IValS -> IValS .
+	eq - ival(I1:Integer) = ival(- I1:Integer-) .
+	op -_ : RValS -> RValS .
+	eq - rval(R1:Real) = rval(- R1:Real) .
 endfm
 
 view SI2base from SEMANTIC-TYPES to SI2-SMT-VALUES is
@@ -145,6 +157,7 @@ fmod SI2-SMT-EVAL is
 	op eval : IExp State -> IValS .
 	***eq eval(val(I:Int), S:State) = toInteger(I:Int) .
 	eq eval(val(I:Int), S:State) = ival(toInteger(I:Int)) .
+	eq eval(- I1:IExp, S:State) = - eval(I1:IExp, S:State) .
 	eq eval(I1:IExp + I2:IExp, S:State) = eval(I1:IExp, S:State) + eval(I2:IExp, S:State) .
 
 	op eval : RExp State -> RValS .
@@ -205,6 +218,7 @@ fmod SI3-NRW-EVAL is
 	op eval : IExp State -> IntFVP .
 	***eq eval(val(I:Int), S:State) = toInteger(I:Int) .
 	eq eval(val(I:Int), S:State) = toIntFVP(I:Int) .
+	eq eval(- I1:IExp, S:State) = - eval(I1:IExp, S:State) .
 	eq eval(I1:IExp + I2:IExp, S:State) = eval(I1:IExp, S:State) + eval(I2:IExp, S:State) .
 endfm
 

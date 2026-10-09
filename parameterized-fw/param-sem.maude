@@ -202,9 +202,9 @@ mod TEST-SI2 is
 	eq initSMT(S:State) = '_`{_`}[upTerm(S:State), 'true.Boolean] .
 
 	*** TODO: Use transformModSymb only to import meta-module (better if narrowing features are not kept)
-    *** red in TEST-SI2 : metaSearch(transformModSymb(upModule('SEMANTIC-SI2, true)), initSMT(TEST1), 'S:State, nil, '*, unbounded, 0) .
+    *** red in TEST-SI2 : metaSearch(trModSMT(upModule('SEMANTIC-SI2, true)), initSMT(TEST1), 'S:State, nil, '*, unbounded, 0) .
     *** Test final states reasoning over p:Integer
-	*** red in TEST-SI2 : metaSearch(transformModSymb(upModule('SEMANTIC-SI2, true)), initSMT(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) >), 'S:State, nil, '!, unbounded, 0) .
+	*** red in TEST-SI2 : metaSearch(trModSMT(upModule('SEMANTIC-SI2, true)), initSMT(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) >), 'S:State, nil, '!, unbounded, 0) .
 
 	*** NOTE: When gettying Advisory: could not find sort Sort in meta-module REAL-INTEGER.
 	*** - Cause: typicallly operator is not defined for datatype and/or eval not defined for operator 
@@ -212,7 +212,7 @@ mod TEST-SI2 is
 endm
 
 *** TODO: Test make command for module transformation
-*** make in NRW-TRANSFORMER : TRANSFORMED-MOD is transformModSymb(SEMANTIC-SI3) endm .
+*** make in NRW-TRANSFORMER : TRANSFORMED-MOD is trModNrw(SEMANTIC-SI3) endm .
 
 
 mod TEST-SI3 is
@@ -227,8 +227,8 @@ mod TEST-SI3 is
 	eq TEST1 = < var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) > .
 	*** eq TEST2 = < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) > .
 
-    *** red in TEST-SI3 : metaNarrowingSearch(transformModSymb(upModule('SEMANTIC-SI3, true)), upTerm(TEST1), 'S:State, '*, unbounded, 'match, delay filter, 0) .
-    *** red in TEST-SI3 : metaNarrowingSearch(transformModSymb(upModule('SEMANTIC-SI3, true)), upTerm(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) >), 'S:State, '!, unbounded, 'match, delay filter, 0) .
+    *** red in TEST-SI3 : metaNarrowingSearch(trModNrw(upModule('SEMANTIC-SI3, true)), upTerm(TEST1), 'S:State, '*, unbounded, 'match, delay filter, 0) .
+    *** red in TEST-SI3 : metaNarrowingSearch(trModNrw(upModule('SEMANTIC-SI3, true)), upTerm(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) >), 'S:State, '!, unbounded, 'match, delay filter, 0) .
 
 endm
 

@@ -21,46 +21,47 @@ fmod META-SMT-HOOK is
 
 endfm
 
+*** TODO: This could be converted to a theory of transformers
 fmod TRANSFORMER is
 
 	*** Adapted from previous version of transformation
 
 	protecting META-LEVEL .
 
-    *** Aux from generic transformation
-    vars M M' : Module .
-    var MConst : Constant .
-    var MVar : Variable .
-    var OpId : Qid .
-    var T1 : Term .
-    var NeTL : NeTermList .
-    var H : Header .
-    var ImpL : ImportList .
-    var SortS : SortSet .
-    var SubSortS : SubsortDeclSet .
-    var OpDeclSet : OpDeclSet .
-    var MbAS : MembAxSet .
-    var EqS : EquationSet .
-    var RlS : RuleSet . 
+  *** Aux from generic transformation
+  vars M M' : Module .
+  var MConst : Constant .
+  var MVar : Variable .
+  var OpId : Qid .
+  var T1 : Term .
+  var NeTL : NeTermList .
+  var H : Header .
+  var ImpL : ImportList .
+  var SortS : SortSet .
+  var SubSortS : SubsortDeclSet .
+  var OpDeclSet : OpDeclSet .
+  var MbAS : MembAxSet .
+  var EqS : EquationSet .
+  var RlS : RuleSet . 
 
-    *** Fuses a module and a functional module into one
-    op fuseMods : Module Module -> Module .
-    eq fuseMods(M, M') = mod getName(M) is
-                            getImports(M) getImports(M')
-                            sorts getSorts(M) ; getSorts(M') .
-                            getSubsorts(M) getSubsorts(M')
-                            getOps(M) getOps(M')
-                            getMbs(M) getMbs(M')
-                            getEqs(M) getEqs(M')
-                            getRls(M) getRls(M')
-                            ***getStrats(M) getStrats(FM)
-                            ***getSds(M) getSds(FM)
-                          endm .
+  *** Fuses a module and a functional module into one
+  op fuseMods : Module Module -> Module .
+  eq fuseMods(M, M') = mod getName(M) is
+                          getImports(M) getImports(M')
+                          sorts getSorts(M) ; getSorts(M') .
+                          getSubsorts(M) getSubsorts(M')
+                          getOps(M) getOps(M')
+                          getMbs(M) getMbs(M')
+                          getEqs(M) getEqs(M')
+                          getRls(M) getRls(M')
+                          ***getStrats(M) getStrats(FM)
+                          ***getSds(M) getSds(FM)
+                       endm .
 
 	op inclSorts : -> SortSet .
   op inclOps : OpDeclSet -> OpDeclSet .
   op inclSEEqs : -> EquationSet .
-	op trRl : RuleSet -> RuleSet .
+	op trRl : RuleSet Module -> RuleSet .
   *** Concolic tranformation
 	op trRl : RuleSet RuleSet Module Module -> RuleSet .
 
@@ -72,7 +73,7 @@ fmod TRANSFORMER is
 						inclOps(getOps(M))
 						getMbs(M)
 						getEqs(M)
-						trRl(getRls(M))
+						trRl(getRls(M), M)
 						***getStrats(M)
 						***getSds(M)
 					endm .
@@ -91,8 +92,10 @@ fmod TRANSFORMER is
                                     endm, upModule('META-SMT-HOOK, true))
     if mod H is ImpL sorts SortS . SubSortS OpDeclSet MbAS EqS RlS endm := fuseMods(M, M') .
     
-  op transformModSymb : Module -> Module .
-  eq transformModSymb(M) = fuseMods(trMod(M), upModule('NARROWING-CONV-EXT, true)) .
+  op trModNrw : Module -> Module .
+  eq trModNrw(M) = fuseMods(trMod(M), upModule('NARROWING-CONV-EXT, true)) .
+  op trModSMT : Module -> Module .
+  eq trModSMT(M) = fuseMods(trMod(M), upModule('META-LEVEL, true)) .
 
   op hasEval : TermList -> Bool .
   eq hasEval(empty)        = false .
@@ -113,7 +116,7 @@ fmod SMT-TRANSFORMER is
 	*** Aux from generic transformation
   vars M M' : Module .
   vars OpId InstId Q : Qid .
-  vars T1 T2 Tcond : Term .
+  vars T1 T2 Tcond TLHS TRHS : Term .
   var NeTL : NeTermList .
   var RlSet : RuleSet .
   var Rule : Rule .
@@ -122,9 +125,12 @@ fmod SMT-TRANSFORMER is
   var OpDecl : OpDecl .
   var NeTypeL : NeTypeList .
 	var Cond : Condition .
+  var SUB : Substitution .
+
+  op errRl : -> Rule [ctor] .
 
   *** Populate inclSorts
-  eq inclSorts = none .
+  eq inclSorts = 'SEState .
 
 	*** Populate inclOps
 	eq inclOps(OpDeclSet) = inclSmtSt(OpDeclSet) .
@@ -133,34 +139,55 @@ fmod SMT-TRANSFORMER is
   eq inclSmtSt(none) = none .
   *** TODO: Maybe change 'State to 'SEState
   eq inclSmtSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
-                                                                        (op '_`{_`} : 'State 'Boolean -> 'State [ctor AttrSet] .) 
+                                                                        (op '_`{_`} : 'State 'Boolean -> 'SEState [ctor AttrSet] .) 
                                                                         inclSmtSt(OpDeclSet) . 
   eq inclSmtSt(OpDecl OpDeclSet) = OpDecl inclSmtSt(OpDeclSet) [owise] .
 
 	*** Populate trRl
-	eq trRl(RlSet) = rlToSMT(RlSet) .
+	eq trRl(RlSet, M) = rlToSMT(RlSet, M) .
 
-	op rlToSMT : RuleSet ~> RuleSet .
-  eq rlToSMT(none) = none .
-  eq rlToSMT(rl T1 => T2 [label(InstId) AttrSet] . RlSet) = 
+  --- sort EqualityCondPair .
+  --- op {_,_} : Term Condition -> EqualityCondPair [ctor] .
+
+  --- op getEqualityCond : Condition -> EqualityCondPair .
+  --- eq getEqualityCond(nil) = {'_===_['true.Boolean, 'true.Boolean]} .
+  --- eq getEqualityCond(C1:Condition /\ C2:Condition) = {'_===_['true.Boolean, 'true.Boolean]} .
+
+	op rlToSMT : RuleSet Module ~> RuleSet .
+  eq rlToSMT(none, M) = none .
+  eq rlToSMT(rl T1 => T2 [label(InstId) AttrSet] . RlSet, M) =
         rl '_`{_`}[T1, 'Constraints:Boolean]
-          => '_`{_`}[T2, 'Constraints:Boolean] 
+          => '_`{_`}[T2, 'Constraints:Boolean]
           [label(toSymb(InstId)) AttrSet] .
-        rlToSMT(RlSet) .
-  eq rlToSMT(crl T1 => T2 if Tcond = 'true.Boolean [label(InstId) AttrSet] . RlSet) = 
+        rlToSMT(RlSet, M) .
+  *** TODO: Maybe only transform if Kind of condition terms is semantic? Otherwise not... That way we are not checking for eval only...
+  *** getKind(M, Tcond) in getKinds(<SemanticTYpes Module>) /\ getKind(M, TRHS) in getKinds(<SemanticTYpes Module>)
+  eq rlToSMT(crl T1 => T2 if Tcond = 'true.Boolean [label(InstId) AttrSet] . RlSet, M) =
         crl '_`{_`}[T1, 'Constraints:Boolean]
           => '_`{_`}[T2, 'Constraints':Boolean]
           if 'Constraints':Boolean := '_and_['Constraints:Boolean, Tcond]
-          /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool 
+          /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool
           [label(toSymb(InstId)) AttrSet] .
-        rlToSMT(RlSet) .
-  eq rlToSMT(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet) = 
+        rlToSMT(RlSet, M) .
+  --- ceq rlToSMT(crl T1 => T2 if TLHS := TRHS [label(InstId) AttrSet] . RlSet, M) = 
+  ---       downTerm(applySubstitution(
+  ---         M,
+  ---         upTerm(crl '_`{_`}[T1, 'Constraints:Boolean]
+  ---                 => '_`{_`}[T2, 'Constraints':Boolean]
+  ---                 if 'Constraints':Boolean := 'Constraints:Boolean
+  ---                 /\ 'metaCheck[upTerm(upModule('REAL-INTEGER, false)), 'upTerm['Constraints':Boolean]] = 'true.Bool 
+  ---                 [label(toSymb(InstId)) AttrSet] .),
+  ---         SUB), errRl)
+  ---       rlToSMT(RlSet, M)
+  ---   if SUB := metaMatch(M, TLHS, TRHS, nil, 0) .
+  *** Handle :, :=, and => cases
+  eq rlToSMT(crl T1 => T2 if Cond [label(InstId) AttrSet] . RlSet, M) = 
         crl '_`{_`}[T1, 'Constraints:Boolean]
           => '_`{_`}[T2, 'Constraints:Boolean]
           if Cond
           [label(toSymb(InstId)) AttrSet] .
-        rlToSMT(RlSet) [owise] .
-  eq rlToSMT(Rule RlSet) = Rule rlToSMT(RlSet) [owise] .
+        rlToSMT(RlSet, M) [owise] .
+  eq rlToSMT(Rule RlSet, M) = Rule rlToSMT(RlSet, M) [owise] .
 endfm
 
 fmod NRW-TRANSFORMER is
@@ -198,7 +225,7 @@ fmod NRW-TRANSFORMER is
   eq extNrwSt(T1, T2) = T1 [owise] .
 
 	*** Populate trRl
-	eq trRl(RlSet) = rlToNarrowing(RlSet) .
+	eq trRl(RlSet, M) = rlToNarrowing(RlSet) .
 
   op rlToNarrowing : RuleSet -> RuleSet .
   eq rlToNarrowing(none) = none .
@@ -258,7 +285,7 @@ fmod CONCOLIC-TRANSFORMER is
 	op inclConcolicSt : OpDeclSet -> OpDeclSet .
   eq inclConcolicSt(none) = none .
   eq inclConcolicSt((op Q : NeTypeL -> 'State [ctor AttrSet] .) OpDeclSet) = (op Q : NeTypeL -> 'State [ctor AttrSet] .)
-                                                                             (op '_`{_`} : 'State 'Boolean -> 'SEState [ctor AttrSet] .) 
+                                                                             (op '_`{_`} : 'State 'Boolean -> 'SEState [ctor AttrSet] .)
                                                                              (op '`[_`]`[_`]`[_`] : 'State 'SEState 'State -> 'ConcolicState [ctor] .)
                                                                              inclConcolicSt(OpDeclSet) . 
   eq inclConcolicSt(OpDecl OpDeclSet) = OpDecl inclConcolicSt(OpDeclSet) [owise] .

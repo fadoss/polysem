@@ -40,7 +40,9 @@ fmod EXPRESSION is
 
 	*** FIXME: Should't this syntax be adaptable by the user to each language? There is a dependency of this in eval definitions on components-impl.maude...
 	*** FIXME: Maybe both should be at level (3)...
+	op -_ : IExp -> IExp .
 	op _+_ : IExp IExp -> IExp .
+	op _-_ : IExp IExp -> IExp .
 	op _=_ : IExp IExp -> BExp .
 	op _<_ : IExp IExp -> BExp .
 	op _>_ : IExp IExp -> BExp .
