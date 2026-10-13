@@ -6,6 +6,8 @@ import time
 ADHOC_CONCOLIC_IMPL = 'adhoc-analysis/while-semantics-concolic.maude'
 
 SEMANTICS_TRANSFORMER_MAUDE = 'gen-semantics-analysis-tr.maude'
+SEMANTICS_PARAMETERIZED_FW_MAUDE = 'parameterized-fw/paramWithMaudeSE.maude'
+
 
 def get_args():
     parser = argparse.ArgumentParser(description="Argument Parser for Maude While Language Concolic Engine", 
@@ -34,6 +36,8 @@ def get_args():
     parser.add_argument("--vOpSet", action="store", help="Narrowing variant op set", default="delay filter")
 
     parser.add_argument("--metrics", action="store_true", help="Enable rewrite metrics without module transformation")
+
+    parser.add_argument("--parameterized", action="store_true", help="Use parameterized mode")
     return parser.parse_args()
 
 def getSymbVarCond(args) :
@@ -71,8 +75,9 @@ if __name__ == '__main__':
         maudeSE.maude.load("smt.maude")
         maudeSE.maude.load("smt-check")
         maudeSE.load(args.file)
-        maudeSE.maude.load(SEMANTICS_TRANSFORMER_MAUDE)
-        mod = maudeSE.maude.getModule('MAUDE-SE-EXT')
+        # Change intermediate transformer module depending on parameterized flag
+        maudeSE.maude.load(SEMANTICS_PARAMETERIZED_FW_MAUDE if args.parameterized else SEMANTICS_TRANSFORMER_MAUDE)
+        mod = maudeSE.maude.getModule('SEMANTIC-SI2-MAUDESE' if args.parameterized else 'MAUDE-SE-EXT')
         #maudeSE.maude.input("set trace on .")
         # MaudeSE main still needs to be invoked to be able to reduce
         # It is invoked with the language semantics instead of the transformer because of collision ("multiple parses" Maude warning)  
