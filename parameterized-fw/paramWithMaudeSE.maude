@@ -1,0 +1,40 @@
+*** To use with MaudeSE via Python library
+
+load param-sem.maude
+
+mod SEMANTIC-SI2-MAUDESE is
+    protecting META-LEVEL .
+    protecting SEMANTIC-SI2 .
+    protecting META-SMT-SEARCH .
+
+    vars StateOp PrOp ValOp TrId SearchType Logic Q : Qid .
+    var  PatternSEState                             : Term .
+    var  InitSEState                                : String . 
+    var  SearchCond                                 : Condition .
+    var  Bound                                      : Bound .
+    var  SolN                                       : Nat .
+    var  NeModIdList                                : NeQidList .
+    var  Fold                                       : Bool .
+    vars M SM                                       : Module .
+
+    op searchMaudeSESimple : Module Qid String Term Condition Qid Bound Nat Qid Bool -> SmtResult2? .
+    eq searchMaudeSESimple(M, StateOp,
+                            InitSEState,
+                            PatternSEState,
+                            SearchCond,
+                            SearchType,
+                            Bound,
+                            SolN,
+                            Logic, Fold)
+                            = metaSmtSearch(M,
+                                            getTerm(metaParse(M, 
+                                                            tokenize(InitSEState), 
+                                                            'State)),
+                                            PatternSEState,
+                                            *** Conditions must be on SMT form
+                                            SearchCond,
+                                            SearchType,
+                                            Bound,
+                                            SolN,
+                                            Logic, Fold) .
+endm
