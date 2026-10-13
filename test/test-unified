@@ -1368,3 +1368,57 @@ red getStdlSTR(fill-blanks(get-sgL((sw(Stdlsg("A")) |-> {inout $ ('std_logic).St
 
 
 select downTerm(getTerm(metaReduceMetaMod(upModule('SEM-TR, true), 'VHDLMOD, 'STDL-NRW-CONVERSION, 'transformModSymb['upModule[''VHDLMOD.Sort, 'true.Bool], ''VHDLCompleteSim.Sort, 'narrowing.TrType])), err:Module) .
+
+
+*** PARAMETERIZED-FRAMEWORK
+
+*** Concrete
+rew in SEMANTIC-SI1 : < if (iref(var('x)) > val(0)) then {var('x) := iref(var('x)) ;} else {var('x) := - iref(var('x)) ; } | (empty | 'x |->I 0 | empty) > .
+
+*** SMT with meta-check
+red in TEST-SI2 : metaSearch(trModSMT(upModule('SEMANTIC-SI2, true)), initSMT(TEST1), 'S:SEState, nil, '*, unbounded, 0) .
+
+Test final states reasoning over p:Integer
+red in TEST-SI2 : metaSearch(trModSMT(upModule('SEMANTIC-SI2, true)), initSMT(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) >), 'S:SEState, nil, '!, unbounded, 0) .
+
+red in TEST-SI2 : metaSearch(trModSMT(upModule('SEMANTIC-SI2, true)), initSMT(< if (iref(var('x)) > val(0)) then {var('x) := iref(var('x)) ;} else {var('x) := - iref(var('x)) ; } | (empty | 'x |->I ival(p:Integer) | empty) >), 'S:SEState, nil, '!, unbounded, 0) .
+
+- With maude_shell
+select TEST-SI2 .
+select trModSMT(upModule('SEMANTIC-SI2, true)) .
+search < if (iref(var('x)) > val(0)) then {var('x) := iref(var('x)) ;} else {var('x) := - iref(var('x)) ; } | (empty | 'x |->I ival(p:Integer) | empty) > {(true).Boolean} =>! S:SEState .
+
+search < if (iref(var('x)) > val(0)) then {var('x) := iref(var('x)) ;} else {var('x) := - iref(var('x)) ; } | (empty | 'x |->I ival(p:Integer) | empty) > {(true).Boolean} =>! < P:Program | ST:Store > {CST:Boolean} .
+
+search < if (iref(var('x)) > val(0)) then {var('x) := iref(var('x)) ;} else {var('x) := - iref(var('x)) ; } | (empty | 'x |->I ival(p:Integer) | empty) > {(true).Boolean} =>* S:SEState .
+
+*** Narrowing
+red in TEST-SI3 : metaNarrowingSearch(trModNrw(upModule('SEMANTIC-SI3, true)), upTerm(TEST1), 'S:State, '*, unbounded, 'match, delay filter, 0) .
+
+red in TEST-SI3 : metaNarrowingSearch(trModNrw(upModule('SEMANTIC-SI3, true)), upTerm(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) >), 'S:State, '!, unbounded, 'match, delay filter, 0) .
+
+*** Concolic
+red in TEST-SI-CONCOLIC : metaSearch(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), initConcolic("< var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | empty | empty) >"), 'S:ConcolicState, nil, '*, unbounded, 0) .
+
+red in TEST-SI-CONCOLIC : metaSearch(concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)), '`[_`]`[_`]`[_`]['<_|_>['__['_:=_;['var[''x.Qid], '_+_['val['s_^2['0.Zero]], 'val['s_^3['0.Zero]]]], 'if_then`{_`}else`{_`}['_>_['iref['var[''x.Qid]], 'iref['var[''y.Qid]]], '_:=_;['var[''z.Qid], 'val['true.Bool]], '_:=_;['var[''z.Qid], 'val['false.Bool]]]], '_|_|_['empty.BStore, '_|->I_[''y.Qid, '0.Zero], 'empty.RStore]], '_`{_`}['<_|_>['__['_:=_;['var[''x.Sort], '_+_['val['s_^2['0.Zero]], 'val['s_^3['0.Zero]]]], 'if_then`{_`}else`{_`}['_>_['iref['var[''x.Sort]], 'iref['var[''y.Sort]]], '_:=_;['var[''z.Sort], 'val['true.Bool]], '_:=_;['var[''z.Sort], 'val['false.Bool]]]], '_|_|_['empty.BStoreS, '_|->I_[''y.Qid, 'ival['p:Integer]], 'empty.RStoreS]], 'true.Boolean], '<_|_>['__['_:=_;['var[''x.Qid], '_+_['val['s_^2['0.Zero]], 'val['s_^3['0.Zero]]]], 'if_then`{_`}else`{_`}['_>_['iref['var[''x.Qid]], 'iref['var[''y.Qid]]], '_:=_;['var[''z.Qid], 'val['true.Bool]], '_:=_;['var[''z.Qid], 'val['false.Bool]]]], '_|_|_['empty.BStore, 'empty.IStore, 'empty.RStore]]], 'S:ConcolicState, nil, '*, unbounded, 0) .
+
+*** We join semantics with framework so only hook and that file are needed
+python3 -m maude_shell ../../Symbolic_Execution_in_Maude/maudeSMTHook.py ../../Symbolic_Execution_in_Maude/parameterized-fw/param-sem.maude
+
+select TEST-SI-CONCOLIC .
+select concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)) .
+search [< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStore | 'y |->I (0).Zero | (empty).RStore) >][< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStoreS | 'y |->I ival(p:Integer) | (empty).RStoreS) > {(true).Boolean}][< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStoreS | 'y |->I ival(p:Integer) | (empty).RStoreS) >] =>! S:ConcolicState .
+
+*** Test
+search [< var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStore | (empty).IStore | (empty).RStore) >][< var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStoreS | (empty).IStoreS | (empty).RStoreS) > {(true).Boolean}][< var('x) := (val(2) + val(3)) ; var('y) := iref(var('x)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStore | (empty).IStore | (empty).RStore) >] =>! S:ConcolicState .
+
+*** With MaudeSE
+*** NOTE: MaudeSE, when used with CLI, needs the selected module to have rules itself (not imported ones) -> USE WITH PYTHON
+select SEMANTIC-SI2 .
+smt-search [1] in SEMANTIC-SI2 : < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) > =>* S:State such that p:Integer > (0).Integer using QF_LRA .
+
+python3 semantics-analysis-ext.py --program "< if (iref(var('x)) > val(0)) then {var('x) := iref(var('x)) ;} else {var('x) := - iref(var('x)) ; } | (empty | 'x |->I ival(p:Integer) | empty) >" --pattern "'<_|_>['nil.Program, 'STR:Store]" --file "parameterized-fw/param-sem.maude" --analysis "maude-se" --sType "'*" --logic "'QF_LRA" --fold "false" --mod "upModule('SEMANTIC-SI2, true)" --stSort "'State" --svars "(p, Integer)" --solN 0
+
+- Absolute value always positive:
+
+python3 semantics-analysis-ext.py --program "< if (iref(var('x)) > val(0)) then {var('y) := iref(var('x)) ;} else {var('y) := - iref(var('x)) ; } | (empty | 'x |->I ival(p:Integer) | empty) >" --pattern "upTerm(< nil | (empty | (ISTR:IStore, 'y |->I ival(q:Integer)) | empty) >)" --file "parameterized-fw/param-sem.maude" --analysis "maude-se" --sType "'*" --logic "'QF_LRA" --fold "false" --mod "upModule('SEMANTIC-SI2, true)" --stSort "'State" --svars "(p, Integer)" --sCond "'_<_['q:Integer, '0.Integer] = 'true.Boolean" --solN 0
