@@ -123,7 +123,7 @@ fmod SI2-SMT-VALUES is
 	op _-_ : RValS RValS -> RValS .
 	eq rval(R1:Real) - rval(R2:Real) = rval(R1:Real - R2:Real) .
 	op -_ : IValS -> IValS .
-	eq - ival(I1:Integer) = ival(- I1:Integer-) .
+	eq - ival(I1:Integer) = ival(- I1:Integer) .
 	op -_ : RValS -> RValS .
 	eq - rval(R1:Real) = rval(- R1:Real) .
 endfm
