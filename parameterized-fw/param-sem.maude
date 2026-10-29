@@ -212,7 +212,7 @@ mod TEST-SI2 is
 endm
 
 *** TODO: Test make command for module transformation
-*** make in NRW-TRANSFORMER : TRANSFORMED-MOD is trModNrw(SEMANTIC-SI3) endm .
+***make TRANSFORMED-MOD is TRNRW(SEMANTIC-SI3) endm
 
 
 mod TEST-SI3 is
@@ -229,6 +229,8 @@ mod TEST-SI3 is
 
     *** red in TEST-SI3 : metaNarrowingSearch(trModNrw(upModule('SEMANTIC-SI3, true)), upTerm(TEST1), 'S:State, '*, unbounded, 'match, delay filter, 0) .
     *** red in TEST-SI3 : metaNarrowingSearch(trModNrw(upModule('SEMANTIC-SI3, true)), upTerm(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) >), 'S:State, '!, unbounded, 'match, delay filter, 0) .
+	*** With custom make module transformation:
+	*** vu-narrow {delay, filter} in TRANSFORMED-MOD : < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) > =>! S:State .
 
 endm
 

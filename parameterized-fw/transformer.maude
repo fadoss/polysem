@@ -248,6 +248,18 @@ fmod NRW-TRANSFORMER is
   eq rlToNarrowing(Rule RlSet) = Rule rlToNarrowing(RlSet) [owise] .
 endfm
 
+*** Using Maude module transformation 
+*** mod TRNRW is
+*** 	protecting MODULE-TRANSFORMER .
+*** 	protecting NRW-TRANSFORMER .
+*** 	
+*** 	var M : Module .
+*** 	var ML : ModuleList .
+*** 	var Q : Qid .
+*** 	op trModNrwGen : ModuleList QidList -> ModuleResult .
+*** 	eq trModNrwGen(nil, Q) = {trModNrw(upModule(Q, true)), nil} .
+*** endm
+
 *** NOTE: In concolic we need to transform conditions to symbolic
 ***       -> Get rule condition from symbolic semantics by id label
 fmod CONCOLIC-TRANSFORMER is
