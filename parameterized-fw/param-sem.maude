@@ -188,10 +188,15 @@ endm
 
 load transformer.maude
 
+*** TODO: Check advisories and warnings
+*** Module transformation using new Maude module transformation feature
+*** make SMT-TRANSFORMED-MOD is TRSMT(SEMANTIC-SI2) endm
+
 mod TEST-SI2 is
 
 	protecting SEMANTIC-SI2 .
 	protecting SMT-TRANSFORMER .
+	*** protecting SMT-TRANSFORMED-MOD .
 
 	ops TEST1 TEST2 : -> State [ctor] .
 
@@ -205,14 +210,16 @@ mod TEST-SI2 is
     *** red in TEST-SI2 : metaSearch(trModSMT(upModule('SEMANTIC-SI2, true)), initSMT(TEST1), 'S:State, nil, '*, unbounded, 0) .
     *** Test final states reasoning over p:Integer
 	*** red in TEST-SI2 : metaSearch(trModSMT(upModule('SEMANTIC-SI2, true)), initSMT(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) >), 'S:State, nil, '!, unbounded, 0) .
+	*** search in SMT-TRANSFORMED-MOD : < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I ival(p:Integer) | empty) > {true} =>! S:State {CST:Boolean} .
 
-	*** NOTE: When gettying Advisory: could not find sort Sort in meta-module REAL-INTEGER.
+	*** NOTE: When getting Advisory: could not find sort Sort in meta-module REAL-INTEGER.
 	*** - Cause: typicallly operator is not defined for datatype and/or eval not defined for operator 
 
 endm
 
-*** TODO: Test make command for module transformation
-***make TRANSFORMED-MOD is TRNRW(SEMANTIC-SI3) endm
+*** TODO: Check advisories and warnings
+*** Module transformation using new Maude module transformation feature
+***make NRW-TRANSFORMED-MOD is TRNRW(SEMANTIC-SI3) endm
 
 
 mod TEST-SI3 is
@@ -220,7 +227,7 @@ mod TEST-SI3 is
 
 	protecting SEMANTIC-SI3 .
 	protecting NRW-TRANSFORMER .
-	***protecting TRANSFORMED-MOD .
+	***protecting NRW-TRANSFORMED-MOD .
 
 	op TEST1 : -> State [ctor] .
 
@@ -230,7 +237,7 @@ mod TEST-SI3 is
     *** red in TEST-SI3 : metaNarrowingSearch(trModNrw(upModule('SEMANTIC-SI3, true)), upTerm(TEST1), 'S:State, '*, unbounded, 'match, delay filter, 0) .
     *** red in TEST-SI3 : metaNarrowingSearch(trModNrw(upModule('SEMANTIC-SI3, true)), upTerm(< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) >), 'S:State, '!, unbounded, 'match, delay filter, 0) .
 	*** With custom make module transformation:
-	*** vu-narrow {delay, filter} in TRANSFORMED-MOD : < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) > =>! S:State .
+	*** vu-narrow {delay, filter} in NRW-TRANSFORMED-MOD : < var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | (empty | 'y |->I p:IntFVP | empty) > =>! S:State .
 
 endm
 
@@ -257,10 +264,15 @@ mod CONCOLIC-SEM is
 	protecting SEMANTIC-SI2' .	
 endm
 
+*** TODO: Check advisories and warnings
+*** Module transformation using new Maude module transformation feature
+*** make CONCOLIC-TRANSFORMED-MOD is TRCONCOLIC(SEMANTIC-SI1 SEMANTIC-SI2') endm
+
 mod TEST-SI-CONCOLIC is
 	*** TODO: TEST
 	protecting CONCOLIC-SEM . 
 	protecting CONCOLIC-TRANSFORMER .
+	***protecting CONCOLIC-TRANSFORMED-MOD .
 
 	var Str : String .
 
@@ -296,6 +308,10 @@ mod TEST-SI-CONCOLIC is
 	*** select TEST-SI-CONCOLIC .
 	*** select concolictrMod(upModule('SEMANTIC-SI1, true), upModule('SEMANTIC-SI2', true)) .
 	*** search [< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStore | 'y |->I (0).Zero | (empty).RStore) >][< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStoreS | 'y |->I ival(p:Integer) | (empty).RStoreS) > {(true).Boolean}][< var('x) := (val(2) + val(3)) ; if (iref(var('x)) > iref(var('y))) then {var('z) := val(true) ;} else {var('z) := val(false) ; } | ((empty).BStoreS | 'y |->I ival(p:Integer) | (empty).RStoreS) >] =>! S:ConcolicState .
+
+	*** Using Maude module transformation feature and maude_shell:
+	*** select CONCOLIC-TRANSFORMED-MOD . *** Then, search
+
 
 	*** NOTE: When gettying Advisory: could not find sort Sort in meta-module REAL-INTEGER.
 	*** - Cause: typicallly operator is not defined for datatype and/or eval not defined for operator 

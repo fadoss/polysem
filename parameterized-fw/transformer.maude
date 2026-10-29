@@ -190,6 +190,18 @@ fmod SMT-TRANSFORMER is
   eq rlToSMT(Rule RlSet, M) = Rule rlToSMT(RlSet, M) [owise] .
 endfm
 
+*** Using Maude module transformation 
+*** mod TRSMT is
+*** 	protecting MODULE-TRANSFORMER .
+*** 	protecting SMT-TRANSFORMER .
+*** 	
+*** 	var M : Module .
+*** 	var ML : ModuleList .
+*** 	var Q : Qid .
+*** 	op trModSMTGen : ModuleList QidList -> ModuleResult .
+*** 	eq trModSMTGen(nil, Q) = {trModSMT(upModule(Q, true)), nil} .
+*** endm
+
 fmod NRW-TRANSFORMER is
 	protecting TRANSFORMER .
 
@@ -418,3 +430,13 @@ fmod CONCOLIC-TRANSFORMER is
           [AttrSet] .)
         rlToConcolic(RlSet, RlSet', M, M') [owise] .
 endfm
+
+*** Using Maude module transformation 
+*** mod TRCONCOLIC is
+*** 	protecting MODULE-TRANSFORMER .
+*** 	protecting CONCOLIC-TRANSFORMER .
+*** 
+*** 	vars Q Q' : Qid .
+*** 	op trModConcolicGen : ModuleList QidList -> ModuleResult .
+*** 	eq trModConcolicGen(nil, Q Q') = {concolictrMod(upModule(Q, true), upModule(Q', true)), nil} .
+*** endm
